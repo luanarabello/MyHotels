@@ -4,20 +4,19 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
   </PropertyGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <SupportedPlatform Include="browser" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Data\DTO\" />
-    <Folder Include="Data\Interfaces\" />
-    <Folder Include="Data\Services\" />
-    <Folder Include="Pages\" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.10" />
   </ItemGroup>
 
-
+  <ItemGroup>
+    <Folder Include="Data\" />
+    <Folder Include="Pages\" />
+  </ItemGroup>
 
 </Project>
