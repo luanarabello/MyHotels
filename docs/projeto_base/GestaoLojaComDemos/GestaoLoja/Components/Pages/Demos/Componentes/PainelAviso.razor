@@ -1,0 +1,18 @@
+@implements IDisposable
+@inject AvisoService Aviso
+
+@* Subscreve um servico partilhado: reage a avisos publicados por QUALQUER componente *@
+<div class="alert alert-info mb-0">
+    @Titulo: <strong>@(Aviso.Mensagem ?? "(nenhum aviso ainda)")</strong>
+</div>
+
+@code {
+    [Parameter] public string Titulo { get; set; } = "Painel";
+
+    protected override void OnInitialized() => Aviso.Mudou += AoMudar;
+
+    // o evento pode vir de outra thread/contexto: InvokeAsync garante o dispatcher certo
+    private void AoMudar() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Aviso.Mudou -= AoMudar;
+}

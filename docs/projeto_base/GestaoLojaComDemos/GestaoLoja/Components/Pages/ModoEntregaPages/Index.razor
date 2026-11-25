@@ -1,0 +1,44 @@
+@page "/modoentregas"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.QuickGrid
+@using GestaoLoja.Entities
+@using GestaoLoja.Data
+@implements IAsyncDisposable
+@inject IDbContextFactory<GestaoLoja.Data.ApplicationDbContext> DbFactory
+
+<PageTitle>Index</PageTitle>
+
+<h1>Index</h1>
+
+<p>
+    <a href="modoentregas/create" class="btn btn-primary rounded-circle" title="Novo">
+        <span class="bi bi-plus-lg"></span>
+    </a>
+</p>
+
+<QuickGrid Class="table" Items="context.ModosEntrega">
+    <PropertyColumn Property="modoentrega => modoentrega.Nome" />
+
+    <TemplateColumn Context="modoentrega">
+        <a href="@($"modoentregas/edit?id={modoentrega.Id}")" class="btn btn-outline-primary btn-sm">
+            <span class="bi bi-pencil-square" aria-hidden="true"></span>
+        </a>
+        <a href="@($"modoentregas/edit?id={modoentrega.Id}")" class="btn btn-outline-info btn-sm">
+            <span class="bi bi-info-circle-fill" aria-hidden="true"></span>
+        </a>
+        <a href="@($"modoentregas/edit?id={modoentrega.Id}")" class="btn btn-danger btn-sm">
+            <span class="bi bi-trash-fill" aria-hidden="true"></span>
+        </a>
+    </TemplateColumn>
+</QuickGrid>
+
+@code {
+    private ApplicationDbContext context = default!;
+
+    protected override void OnInitialized()
+    {
+        context = DbFactory.CreateDbContext();
+    }
+
+    public async ValueTask DisposeAsync() => await context.DisposeAsync();
+}

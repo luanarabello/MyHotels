@@ -1,0 +1,61 @@
+@page "/demos/comunicacao"
+@inject AvisoService Aviso
+
+<DemoPagina Slug="comunicacao" Titulo="Comunicação entre componentes"
+            Objetivo="ver as quatro formas habituais de os componentes trocarem informação.">
+    <ChildContent>
+        <h2 class="h6">1. Pai &rarr; filho: <code>[Parameter]</code> &nbsp; e &nbsp; filho &rarr; pai: <code>EventCallback</code></h2>
+        <p>Pai: <code>contador = @contador</code></p>
+        <ContadorFilho Valor="contador" OnIncrementar="NovoValor" />
+
+        <hr />
+        <h2 class="h6">2. Cascading value: <code>CascadingValue</code></h2>
+        <div class="mb-2">
+            <button class="btn btn-sm btn-outline-secondary me-1" @onclick='() => tema = "claro"'>Tema claro</button>
+            <button class="btn btn-sm btn-outline-dark" @onclick='() => tema = "escuro"'>Tema escuro</button>
+        </div>
+        <CascadingValue Value="tema" Name="Tema">
+            <div class="border rounded p-2">
+                Pai intermédio (não sabe nada do tema)
+                <div class="mt-2"><CaixaTema /></div>
+            </div>
+        </CascadingValue>
+
+        <hr />
+        <h2 class="h6">3. Serviço partilhado com evento (<code>AvisoService</code>)</h2>
+        <div class="input-group mb-2">
+            <input class="form-control" @bind="mensagem" placeholder="Mensagem a publicar" />
+            <button class="btn btn-primary" @onclick="Publicar">Publicar aviso</button>
+        </div>
+        <div class="row g-2">
+            <div class="col-md-6"><PainelAviso Titulo="Painel A" /></div>
+            <div class="col-md-6"><PainelAviso Titulo="Painel B" /></div>
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <table class="table table-sm">
+            <thead><tr><th>Mecanismo</th><th>Direcção</th><th>Quando usar</th></tr></thead>
+            <tbody>
+                <tr><td><code>[Parameter]</code></td><td>pai &rarr; filho</td><td>dados directos, o caso mais simples</td></tr>
+                <tr><td><code>EventCallback</code></td><td>filho &rarr; pai</td><td>o filho avisa que "algo aconteceu"; o pai decide o que fazer. Faz re-render do pai automaticamente</td></tr>
+                <tr><td><code>CascadingValue</code></td><td>antepassado &rarr; qualquer descendente</td><td>dados "ambiente" (tema, utilizador, <code>EditContext</code>) sem passar por todos os níveis</td></tr>
+                <tr><td>Serviço com evento</td><td>qualquer &harr; qualquer</td><td>componentes sem relação hierárquica; guardar estado partilhado dentro do circuit (serviço <em>Scoped</em>)</td></tr>
+            </tbody>
+        </table>
+        <ul class="mb-0">
+            <li>Prefira o mecanismo mais simples que resolve o problema: parâmetros primeiro, serviços só quando necessário.</li>
+            <li>Num serviço com evento, <strong>cancele sempre a subscription</strong> em <code>Dispose</code> (veja <code>PainelAviso</code>); senão o serviço continua a referenciar o componente, que nunca é libertado (<em>memory leak</em>) e continua a reagir depois de sair da página.</li>
+            <li>Um componente não deve alterar os seus próprios parâmetros: os valores fluem sempre de cima para baixo.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private int contador = 0;
+    private string tema = "claro";
+    private string mensagem = "Olá a todos!";
+
+    private void NovoValor(int valor) => contador = valor;
+
+    private void Publicar() => Aviso.Publicar($"{mensagem} ({DateTime.Now:HH:mm:ss})");
+}

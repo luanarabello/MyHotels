@@ -1,0 +1,188 @@
+﻿@page "/produtos/create"
+
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@using GestaoLoja.Entities
+@using GestaoLoja.Services
+
+@attribute [Authorize(Roles = AppConfig.RoleAdmin)]
+
+@inject IDbContextFactory<GestaoLoja.Data.ApplicationDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject ImagemService Imagens
+
+<PageTitle>Criar produto</PageTitle>
+
+<h1>Criar</h1>
+
+<h2>Produto</h2>
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <EditForm Model="Produto" OnValidSubmit="AddProduto">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" role="alert" />
+
+            @if (!string.IsNullOrEmpty(erro))
+            {
+                <div class="alert alert-danger" role="alert">@erro</div>
+            }
+
+            <fieldset disabled="@aGuardar">
+                <div class="mb-3">
+                    <span class="text-danger">*</span>
+                    <label for="nome" class="form-label">Nome:</label>
+                    <InputText id="nome" @bind-Value="Produto.Nome" class="form-control" aria-required="true" />
+                    <ValidationMessage For="() => Produto.Nome" class="text-danger" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição:</label>
+                    <InputText id="descricao" @bind-Value="Produto.Descricao" class="form-control" />
+                    <ValidationMessage For="() => Produto.Descricao" class="text-danger" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="preco" class="form-label">Preço:</label>
+                    <InputNumber id="preco" @bind-Value="Produto.Preco" class="form-control" />
+                    <ValidationMessage For="() => Produto.Preco" class="text-danger" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="imagem" class="form-label">Imagem:</label>
+                    <InputFile id="imagem"
+                               OnChange="HandleFileSelected"
+                               class="form-control"
+                               accept=".jpg,.jpeg,.png,.gif,.webp" />
+                    <div class="form-text">Seleciona uma imagem JPG, PNG, GIF ou WEBP, até 2 MB.</div>
+
+                    @if (selectedFile is not null)
+                    {
+                        <div class="form-text">
+                            Selecionada: @selectedFile.Name (@(selectedFile.Size / 1024) KB)
+                        </div>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label for="categoriaid" class="form-label">Categoria:</label>
+                    <InputSelect id="categoriaid" @bind-Value="Produto.CategoriaId" class="form-control form-select">
+                        <option value="0">Seleccione uma Categoria</option>
+                        @foreach (var cat in listaDeCategorias)
+                        {
+                            <option value="@cat.Id">@cat.Nome</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="mb-3">
+                    <label for="modoentregaid" class="form-label">Modo de Entrega:</label>
+                    <InputSelect id="modoentregaid" @bind-Value="Produto.ModoEntregaId" class="form-control form-select">
+                        <option value="0">Seleccione um modo de entrega</option>
+                        @foreach (var modo in listaDeModos)
+                        {
+                            <option value="@modo.Id">@modo.Nome</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <button type="submit" class="btn btn-primary">
+                    @(aGuardar ? "A guardar..." : "Criar")
+                </button>
+            </fieldset>
+        </EditForm>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="/produtos">Voltar à lista</a>
+</div>
+
+@code {
+    // As imagens ficam guardadas na BD como "img/<ficheiro>" (caminho relativo a wwwroot)
+    private const string PastaImagens = "img/";
+
+    private Produto Produto { get; set; } = new();
+
+    private List<Categoria> listaDeCategorias { get; set; } = new();
+    private List<ModoEntrega> listaDeModos { get; set; } = new();
+
+    private IBrowserFile? selectedFile;
+    private string? erro;
+    private bool aGuardar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        listaDeCategorias = await context.Categorias.AsNoTracking().ToListAsync();
+        listaDeModos = await context.ModosEntrega.AsNoTracking().ToListAsync();
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        erro = null;
+        selectedFile = e.File;
+
+        if (selectedFile.Size > ImagemService.TamanhoMaximo)
+        {
+            erro = "A imagem não pode ultrapassar 2 MB.";
+            selectedFile = null;
+        }
+    }
+
+    private async Task AddProduto()
+    {
+        erro = null;
+
+        if (Produto.CategoriaId == 0 || Produto.ModoEntregaId == 0)
+        {
+            erro = "Seleccione a categoria e o modo de entrega.";
+            return;
+        }
+
+        aGuardar = true;
+        string? novaImagem = null;
+
+        try
+        {
+            // 1) validar e guardar a imagem (extensão, tipo e tamanho validados no serviço)
+            if (selectedFile is not null)
+            {
+                var resultado = await Imagens.GuardarAsync(selectedFile);
+                if (!resultado.Ok)
+                {
+                    erro = resultado.Erro;
+                    return;
+                }
+                novaImagem = PastaImagens + resultado.Nome;
+                Produto.Imagem = novaImagem;
+            }
+
+            // 2) gravar; se falhar, não deixar a imagem órfã no disco
+            using var context = DbFactory.CreateDbContext();
+            context.Produtos.Add(Produto);
+            try
+            {
+                await context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                Imagens.Apagar(novaImagem);
+                Produto.Imagem = null;
+                erro = "Não foi possível guardar o produto. Verifica os dados e tenta novamente.";
+                return;
+            }
+
+            NavigationManager.NavigateTo("/produtos");
+        }
+        catch (IOException)
+        {
+            Imagens.Apagar(novaImagem);
+            erro = "Não foi possível guardar a imagem. Tenta novamente.";
+        }
+        finally
+        {
+            aGuardar = false;
+        }
+    }
+}

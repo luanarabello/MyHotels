@@ -1,0 +1,153 @@
+﻿@implements IDisposable
+
+@inject NavigationManager NavigationManager
+
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">PWEB : Gestao Loja</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="sobre">
+                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Sobre
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="categorias">
+                <span class="bi bi-tags-fill-nav-menu" aria-hidden="true"></span> Categorias (manual)
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="categoria">
+                <span class="bi bi-table-nav-menu" aria-hidden="true"></span> Categorias
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="modoentregas">
+                <span class="bi bi-truck-nav-menu" aria-hidden="true"></span> Modos de Entrega
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="produtos">
+                <span class="bi bi-box-seam-fill-nav-menu" aria-hidden="true"></span> Produtos
+            </NavLink>
+        </div>
+
+     
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="auth">
+                <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Auth Required
+            </NavLink>
+        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Manage">
+                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
+                        <button type="submit" class="nav-link">
+                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
+                        </button>
+                    </form>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Register">
+                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Register
+                    </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="Account/Login">
+                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Login
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+        <details class="nav-item px-3 demos-menu" open="@(currentUrl?.StartsWith("demos", StringComparison.OrdinalIgnoreCase) == true)">
+            <summary>
+                <span class="bi bi-mortarboard-fill-nav-menu" aria-hidden="true"></span> Demos
+            </summary>
+            <NavLink class="nav-link demos-todas" href="demos" Match="NavLinkMatch.All">Todas as demos</NavLink>
+            <NavLink class="nav-link demos-todas" href="demos/glossario">Glossário</NavLink>
+
+            <div class="demos-grupo">Formulários</div>
+            <NavLink class="nav-link" href="demos/bind">@@bind vs @@bind:event</NavLink>
+            <NavLink class="nav-link" href="demos/binding-manual">Binding manual</NavLink>
+            <NavLink class="nav-link" href="demos/validacao">Validação em camadas</NavLink>
+            <NavLink class="nav-link" href="demos/eventos-form">Eventos do EditForm</NavLink>
+            <NavLink class="nav-link" href="demos/static-ssr">Static SSR</NavLink>
+            <NavLink class="nav-link" href="demos/ssr-interativo">Interactive Server</NavLink>
+            <NavLink class="nav-link" href="demos/static-overposting">Over-posting</NavLink>
+
+            <div class="demos-grupo">Lifecycle e render</div>
+            <NavLink class="nav-link" href="demos/ciclo-vida">Lifecycle</NavLink>
+            <NavLink class="nav-link" href="demos/prerender">Prerender</NavLink>
+            <NavLink class="nav-link" href="demos/invoke-async">InvokeAsync</NavLink>
+            <NavLink class="nav-link" href="demos/di-tempo-vida">Lifetime da DI</NavLink>
+
+            <div class="demos-grupo">Entity Framework</div>
+            <NavLink class="nav-link" href="demos/concorrencia">DbContext vs Factory</NavLink>
+            <NavLink class="nav-link" href="demos/n-mais-1">N+1 e Include</NavLink>
+            <NavLink class="nav-link" href="demos/tracking">Tracking</NavLink>
+            <NavLink class="nav-link" href="demos/concorrencia-optimista">Optimistic concurrency</NavLink>
+            <NavLink class="nav-link" href="demos/cascade-restrict">Cascade vs Restrict</NavLink>
+            <NavLink class="nav-link" href="demos/migrations">Migrations</NavLink>
+
+            <div class="demos-grupo">Identity e segurança</div>
+            <NavLink class="nav-link" href="demos/identidade">Quem sou eu?</NavLink>
+            <NavLink class="nav-link" href="demos/autorizacao">Autorização</NavLink>
+            <NavLink class="nav-link" href="demos/xss">XSS</NavLink>
+            <NavLink class="nav-link" href="demos/upload-inseguro">Upload inseguro</NavLink>
+
+            <div class="demos-grupo">Componentes</div>
+            <NavLink class="nav-link" href="demos/comunicacao">Comunicação</NavLink>
+            <NavLink class="nav-link" href="demos/componentes-genericos">Componentes genéricos</NavLink>
+            <NavLink class="nav-link" href="demos/js-interop">JS interop</NavLink>
+        </details>
+
+    </nav>
+</div>
+
+@code {
+    private string? currentUrl;
+
+    protected override void OnInitialized()
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}
+

@@ -1,0 +1,68 @@
+@page "/demos/identidade"
+@inject AuthenticationStateProvider AuthProvider
+
+<DemoPagina Slug="identidade" Titulo="Quem sou eu?"
+            Objetivo="ver o que a aplicação sabe sobre o utilizador actual: identidade, claims e roles.">
+    <ChildContent>
+        @if (user is null)
+        {
+            <p><em>A carregar...</em></p>
+        }
+        else
+        {
+            <div class="alert @(user.Identity?.IsAuthenticated == true ? "alert-success" : "alert-secondary")">
+                @if (user.Identity?.IsAuthenticated == true)
+                {
+                    <span>Autenticado como <strong>@user.Identity.Name</strong></span>
+                }
+                else
+                {
+                    <span>Utilizador <strong>anónimo</strong>. <a href="Account/Login">Faça login</a> e volte a esta página.</span>
+                }
+            </div>
+
+            <ul class="list-group mb-3">
+                <li class="list-group-item"><code>User.Identity.IsAuthenticated</code>: <strong>@(user.Identity?.IsAuthenticated)</strong></li>
+                <li class="list-group-item"><code>User.Identity.Name</code>: <strong>@(user.Identity?.Name ?? "(vazio)")</strong></li>
+                <li class="list-group-item"><code>User.Identity.AuthenticationType</code>: <strong>@(user.Identity?.AuthenticationType ?? "(nenhum)")</strong></li>
+                <li class="list-group-item"><code>User.IsInRole("Admin")</code>: <strong>@user.IsInRole("Admin")</strong></li>
+            </ul>
+
+            <h2 class="h6">Claims (@user.Claims.Count())</h2>
+            @if (!user.Claims.Any())
+            {
+                <p class="text-muted">Sem claims: o utilizador é anónimo.</p>
+            }
+            else
+            {
+                <table class="table table-sm">
+                    <thead><tr><th>Tipo</th><th>Valor</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in user.Claims)
+                        {
+                            <tr><td class="small"><code>@c.Type</code></td><td>@c.Value</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><strong>Autenticação</strong> responde a <em>"quem és?"</em>; <strong>autorização</strong> responde a <em>"o que podes fazer?"</em>.</li>
+            <li>O utilizador é um <code>ClaimsPrincipal</code>: um conjunto de <strong>claims</strong> (pares tipo/valor) como o Id, o nome, o email e as roles. As roles são apenas claims do tipo <code>role</code>.</li>
+            <li>Em Blazor obtém-se o utilizador via <code>AuthenticationStateProvider</code> ou com o cascading parameter <code>Task&lt;AuthenticationState&gt;</code> (configurado por <code>AddCascadingAuthenticationState</code> no <code>Program.cs</code>).</li>
+            <li>Com o Identity, o cookie de autenticação transporta estes claims, criados no login. Se alterar as roles de um utilizador, a mudança só chega a uma sessão já aberta num novo login ou quando o <em>security stamp</em> for revalidado (por omissão, de 30 em 30 minutos, e só faz efeito se o stamp tiver mudado).</li>
+            <li>Neste projecto existem as roles <code>Admin</code> e <code>Cliente</code> (criadas no arranque por <code>Inicializacao</code>, com <code>AddRoles</code> no <code>Program.cs</code>). Em Development também existem dois utilizadores de teste (ver o <code>README.md</code>): entre como <code>admin@gestaoloja.pt</code> e veja <code>IsInRole("Admin")</code> a <em>true</em> e o claim <code>role</code> na tabela. Um utilizador novo, registado na página Register, fica sem nenhuma role.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private System.Security.Claims.ClaimsPrincipal? user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = (await AuthProvider.GetAuthenticationStateAsync()).User;
+    }
+}

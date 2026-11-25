@@ -1,0 +1,93 @@
+@page "/demos/upload-inseguro"
+
+<DemoPagina Slug="upload-inseguro" Titulo="Upload inseguro"
+            Objetivo="ver o que acontece se se confiar no nome do ficheiro enviado pelo utilizador.">
+    <ChildContent>
+        <p>
+            Pasta de destino (simulada): <code>@Pasta</code>. <strong>Nenhum ficheiro é gravado</strong>: só se calculam caminhos.
+        </p>
+        <div class="input-group mb-3">
+            <span class="input-group-text">Nome enviado</span>
+            <input class="form-control" @bind="nomePersonalizado" @bind:event="oninput" placeholder="escreva um nome de ficheiro…" />
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Nome enviado</th>
+                        <th>INSEGURO: caminho final</th>
+                        <th>Fica na pasta?</th>
+                        <th>Extensão permitida?</th>
+                        <th class="text-success">SEGURO: nome gravado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var nome in Nomes)
+                    {
+                        var inseguro = Calcular(nome);
+                        <tr>
+                            <td><code>@nome</code></td>
+                            <td class="small"><code>@inseguro.Caminho</code></td>
+                            <td>
+                                @if (inseguro.Dentro) { <span class="badge bg-success">sim</span> }
+                                else { <span class="badge bg-danger">NÃO: escapa!</span> }
+                            </td>
+                            <td>
+                                @if (inseguro.ExtensaoOk) { <span class="badge bg-success">sim</span> }
+                                else { <span class="badge bg-danger">não</span> }
+                            </td>
+                            <td class="small"><code>@Seguro(nome)</code></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><strong>Path traversal</strong>: um nome como <code>..\..\appsettings.json</code> ou um caminho absoluto faz com que <code>Path.Combine</code> aponte para fora da pasta e possa <em>sobrescrever ficheiros do servidor</em>. Um <code>InputFile</code> normal envia só o nome do ficheiro, sem caminho; nomes assim só chegam por pedidos forjados (ou por APIs/multipart), mas o servidor nunca deve confiar no nome recebido.</li>
+            <li><strong>Extensões perigosas</strong>: um <code>.html</code> ou <code>.svg</code> guardado em <code>wwwroot</code> é servido pelo seu site, e o JavaScript lá dentro corre no browser de quem o abrir (<em>stored XSS</em>). Noutros servidores, ficheiros como <code>.aspx</code> ou <code>.php</code> podem ser executados no próprio servidor (o ASP.NET Core não executa <code>.aspx</code> nem <code>.exe</code>, mas aceitar extensões arbitrárias é sempre arriscado). Use sempre uma <strong>lista de extensões permitidas</strong> (whitelist), nunca uma lista de proibidas.</li>
+            <li><strong>Dupla extensão e maiúsculas</strong>: <code>foto.jpg.exe</code> e <code>FOTO.PNG</code> mostram porque se compara a <em>última</em> extensão, em minúsculas.</li>
+            <li><strong>Boas práticas</strong>: gerar o nome no servidor (<code>Guid</code> + extensão da whitelist), limitar o tamanho e validar o <code>ContentType</code> (o <code>ImagemService</code> da loja faz estas quatro). Falta ainda, como melhoria, validar os primeiros bytes do ficheiro ("magic numbers"), porque o <code>ContentType</code> também é enviado pelo cliente e pode ser falsificado.</li>
+            <li>Guardar uploads fora da pasta que o servidor executa, ou em armazenamento próprio, reduz ainda mais o risco.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private static readonly string Pasta = Path.Combine(Path.GetTempPath(), "site", "img");
+    private static readonly string[] Permitidas = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+    private static readonly string[] Base =
+    [
+        "foto.jpg",
+        @"..\..\appsettings.json",
+        "../../Program.cs",
+        @"C:\Windows\System32\drivers\etc\hosts",
+        "shell.aspx",
+        "foto.jpg.exe",
+        "FOTO.PNG",
+        "pagina.html",
+    ];
+
+    private string nomePersonalizado = "";
+
+    private IEnumerable<string> Nomes =>
+        string.IsNullOrWhiteSpace(nomePersonalizado) ? Base : Base.Append(nomePersonalizado);
+
+    private record Resultado(string Caminho, bool Dentro, bool ExtensaoOk);
+
+    private static Resultado Calcular(string nome)
+    {
+        var caminho = Path.GetFullPath(Path.Combine(Pasta, nome));
+        var dentro = caminho.StartsWith(Path.GetFullPath(Pasta) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        var ext = Path.GetExtension(nome).ToLowerInvariant();
+        return new Resultado(caminho, dentro, Permitidas.Contains(ext));
+    }
+
+    private static string Seguro(string nome)
+    {
+        var ext = Path.GetExtension(nome).ToLowerInvariant();
+        return Permitidas.Contains(ext) ? $"{Guid.NewGuid():N}{ext}" : "(rejeitado)";
+    }
+}

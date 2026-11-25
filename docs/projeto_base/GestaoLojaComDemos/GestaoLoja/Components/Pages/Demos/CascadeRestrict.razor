@@ -1,0 +1,122 @@
+@page "/demos/cascade-restrict"
+@inject DemoDbService DemoDb
+
+<DemoPagina Slug="cascade-restrict" Titulo="Cascade vs Restrict"
+            Objetivo="ver o que acontece ao apagar uma categoria que tem produtos.">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card h-100 border-danger">
+                    <div class="card-body">
+                        <h2 class="h6 text-danger"><code>DeleteBehavior.Cascade</code></h2>
+                        <p class="small">Cria uma categoria nova com 3 produtos e apaga-a.</p>
+                        <button class="btn btn-danger btn-sm" @onclick="TestarCascade">Apagar categoria (Cascade)</button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100 border-success">
+                    <div class="card-body">
+                        <h2 class="h6 text-success"><code>DeleteBehavior.Restrict</code></h2>
+                        <p class="small">Cria uma categoria nova com 3 produtos protegidos e tenta apagá-la, de duas formas:</p>
+                        <button class="btn btn-success btn-sm mb-1" @onclick="() => TestarRestrict(false)">Apagar (produtos não carregados)</button>
+                        <button class="btn btn-outline-success btn-sm mb-1" @onclick="() => TestarRestrict(true)">Apagar (produtos carregados, em tracking)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @foreach (var l in registo)
+        {
+            <div class="small mt-1">@l</div>
+        }
+        @if (resultado is not null)
+        {
+            <div class="alert alert-info mt-3">@resultado</div>
+        }
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><strong>Cascade</strong>: apagar a categoria apaga também todos os produtos. É o comportamento por omissão para foreign keys obrigatórias (<em>required relationships</em>) e é <strong>perigoso</strong>: um clique em "Apagar" pode destruir centenas de registos sem aviso.</li>
+            <li><strong>Restrict</strong>: o EF nunca apaga os produtos, e a categoria não pode ser apagada enquanto existirem produtos. A excepção depende de os produtos estarem carregados no <code>DbContext</code>:
+                <ul>
+                    <li><strong>não carregados</strong>: o <code>DELETE</code> vai à BD e é a BD que o recusa; o EF lança <code>DbUpdateException</code> (<em>FOREIGN KEY constraint failed</em>);</li>
+                    <li><strong>carregados (tracking)</strong>: o EF detecta o problema logo no <code>Remove</code>, antes de ir à BD, e lança <code>InvalidOperationException</code> (<em>the association … has been severed</em>).</li>
+                </ul>
+                Em qualquer dos casos nada é apagado, e a aplicação deve apanhar a excepção e mostrar uma mensagem.</li>
+            <li>Outras opções do <code>DeleteBehavior</code>: <code>SetNull</code> (precisa de uma foreign key anulável), <code>NoAction</code>, <code>ClientCascade</code>, <code>ClientSetNull</code>, <code>ClientNoAction</code>.</li>
+            <li>No projecto da loja configurámos <code>Restrict</code> em <code>OnModelCreating</code>, e as páginas de apagar categorias e modos de entrega tratam a excepção com uma mensagem.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private readonly List<string> registo = new();
+    private string? resultado;
+
+    private async Task TestarCascade()
+    {
+        registo.Clear();
+        using var ctx = DemoDb.Criar();
+        var cat = new DemoCategoria { Nome = $"Temporária {DateTime.Now:HH:mm:ss}" };
+        for (int i = 1; i <= 3; i++) cat.Produtos.Add(new DemoProduto { Nome = $"Produto {i}", Preco = i });
+        ctx.Categorias.Add(cat);
+        await ctx.SaveChangesAsync();
+        registo.Add($"Criada a categoria '{cat.Nome}' com {await ctx.Produtos.CountAsync(p => p.DemoCategoriaId == cat.Id)} produtos.");
+
+        ctx.Categorias.Remove(cat);
+        await ctx.SaveChangesAsync();
+        var restantes = await ctx.Produtos.CountAsync(p => p.DemoCategoriaId == cat.Id);
+        registo.Add("Categoria apagada.");
+        resultado = $"Cascade: depois de apagar a categoria sobraram {restantes} produtos. Os 3 produtos foram apagados automaticamente, sem aviso.";
+    }
+
+    private async Task TestarRestrict(bool produtosEmTracking)
+    {
+        registo.Clear();
+        resultado = null;
+
+        // 1) criar a categoria e os produtos protegidos num DbContext que e logo descartado
+        int categoriaId;
+        using (var criar = DemoDb.Criar())
+        {
+            var nova = new DemoCategoria { Nome = $"Protegida {DateTime.Now:HH:mm:ss}" };
+            for (int i = 1; i <= 3; i++) nova.ProdutosR.Add(new DemoProdutoR { Nome = $"Produto protegido {i}" });
+            criar.Categorias.Add(nova);
+            await criar.SaveChangesAsync();
+            categoriaId = nova.Id;
+            registo.Add($"Criada a categoria '{nova.Nome}' com {nova.ProdutosR.Count} produtos.");
+        }
+
+        // 2) tentar apagar a categoria noutro DbContext
+        using var ctx = DemoDb.Criar();
+        var cat = produtosEmTracking
+            ? await ctx.Categorias.Include(c => c.ProdutosR).FirstAsync(c => c.Id == categoriaId)   // produtos carregados
+            : await ctx.Categorias.FirstAsync(c => c.Id == categoriaId);                              // produtos NAO carregados
+        registo.Add(produtosEmTracking
+            ? $"Categoria carregada com os {cat.ProdutosR.Count} produtos (em tracking)."
+            : "Categoria carregada sem os produtos.");
+
+        string excepcao = "";
+        try
+        {
+            ctx.Categorias.Remove(cat);
+            await ctx.SaveChangesAsync();
+            resultado = "A categoria foi apagada (inesperado).";
+            return;
+        }
+        catch (DbUpdateException ex)               // a BD recusou o DELETE
+        {
+            excepcao = $"DbUpdateException: {ex.InnerException?.Message ?? ex.Message}";
+        }
+        catch (InvalidOperationException ex)       // o EF recusou antes de ir a BD
+        {
+            excepcao = $"InvalidOperationException: {ex.Message}";
+        }
+
+        registo.Add(excepcao);
+        using var verificar = DemoDb.Criar();
+        var restantes = await verificar.ProdutosR.CountAsync(p => p.DemoCategoriaId == categoriaId);
+        resultado = $"Restrict: nada foi apagado. Os {restantes} produtos continuam intactos.";
+    }
+}

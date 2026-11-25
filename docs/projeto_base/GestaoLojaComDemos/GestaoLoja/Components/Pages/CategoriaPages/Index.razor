@@ -1,0 +1,48 @@
+@page "/categoria"
+
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.QuickGrid
+@using GestaoLoja.Entities
+@using GestaoLoja.Data
+
+@implements IAsyncDisposable
+
+@inject IDbContextFactory<GestaoLoja.Data.ApplicationDbContext> DbFactory
+
+<PageTitle>Categorias</PageTitle>
+
+<h1>Listagem de Produtos</h1>
+
+<p>
+    <a href="categoria/create" class="btn btn-primary rounded-circle">
+        <span class="bi bi-plus-lg"></span>
+    </a>
+</p>
+
+<QuickGrid Class="table" Items="context.Categorias">
+    <PropertyColumn Property="categoria => categoria.Nome" />
+    <PropertyColumn Property="categoria => categoria.Id" />
+
+    <TemplateColumn Context="categoria">
+        <a href="@($"categoria/edit?id={categoria.Id}&nome={categoria.Nome}")" class="btn btn-outline-primary btn-sm">
+            <span class="bi bi-pencil-square" aria-hidden="true"></span>
+        </a>
+        <a href="@($"categoria/details?id={categoria.Id}")" class="btn btn-outline-info btn-sm">
+            <span class="bi bi-info-circle-fill" aria-hidden="true"></span>
+        </a>
+        <a href="@($"categoria/delete?id={categoria.Id}")" class="btn btn-danger btn-sm">
+            <span class="bi bi-trash-fill" aria-hidden="true"></span>
+        </a>
+    </TemplateColumn>
+</QuickGrid>
+
+@code {
+    private ApplicationDbContext context = default!;
+
+    protected override void OnInitialized()
+    {
+        context = DbFactory.CreateDbContext();
+    }
+
+    public async ValueTask DisposeAsync() => await context.DisposeAsync();
+}

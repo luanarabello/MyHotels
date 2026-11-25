@@ -1,0 +1,188 @@
+@page "/demos/glossario"
+@implements IAsyncDisposable
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using System.Globalization
+@using System.Net
+@using System.Text
+@using System.Text.RegularExpressions
+
+<PageTitle>Glossário de conceitos e termos técnicos</PageTitle>
+
+<h1>Glossário de conceitos e termos técnicos</h1>
+<p class="lead">
+    Os termos técnicos mantêm-se em inglês, como na documentação e nas ofertas de trabalho, e aqui explicam-se em português.
+    Cada termo diz em que demos aparece. Nas demos, o fundo de cada página tem links para os termos que ela usa.
+</p>
+
+<div class="mb-3">
+    <input class="form-control" type="search" placeholder="Pesquisar um termo ou uma palavra da definição…"
+           @bind="filtro" @bind:event="oninput" aria-label="Pesquisar no glossário" />
+    <div class="small text-muted mt-1">
+        @(visiveis.Count) de @GlossarioDados.Termos.Length termos
+        @if (!string.IsNullOrWhiteSpace(filtro)) { <span> · <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @onclick='() => filtro = ""'>limpar pesquisa</button></span> }
+    </div>
+</div>
+
+<nav class="mb-4 small" aria-label="Grupos">
+    @foreach (var g in GlossarioDados.Grupos)
+    {
+        <a class="badge bg-primary text-white text-decoration-none me-1" href="@($"demos/glossario#{IdGrupo(g)}")">@g</a>
+    }
+</nav>
+
+@if (visiveis.Count == 0)
+{
+    <div class="alert alert-warning">Nenhum termo corresponde a "@filtro".</div>
+}
+
+@foreach (var grupo in GlossarioDados.Grupos)
+{
+    var termosDoGrupo = visiveis.Where(t => t.Grupo == grupo).OrderBy(t => Normalizar(t.Nome), StringComparer.Ordinal).ToList();
+    if (termosDoGrupo.Count == 0) continue;
+
+    <h2 class="h4 mt-4" id="@IdGrupo(grupo)">@grupo</h2>
+    @foreach (var t in termosDoGrupo)
+    {
+        var demos = GlossarioDados.DemosDoTermo(t.Id).ToList();
+        var pt = GlossarioDados.EmPortuguesDe(t.Id);
+        <section class="termo card mb-2 @(t.Id == destacado ? "termo-destacado" : "")" id="@t.Id">
+            <div class="card-body py-2">
+                <h3 class="h6 mb-1">
+                    <a class="text-decoration-none text-reset" href="@($"demos/glossario#{t.Id}")" @onclick="() => Saltar(t.Id)">@t.Nome</a>
+                    @if (pt is not null)
+                    {
+                        <span class="fw-normal text-muted small ms-1">(em português: @pt)</span>
+                    }
+                </h3>
+                <p class="mb-1">@Formatar(t.Definicao)</p>
+                @if (t.Exemplo is not null)
+                {
+                    <pre class="bg-light border rounded p-2 small mb-1"><code>@t.Exemplo</code></pre>
+                }
+                @if (t.Ver is { Length: > 0 })
+                {
+                    <div class="small">
+                        <span class="text-muted me-1">Ver também:</span>
+                        @foreach (var v in t.Ver)
+                        {
+                            var outro = GlossarioDados.Procurar(v);
+                            if (outro is not null)
+                            {
+                                <a class="me-1" href="@($"demos/glossario#{outro.Id}")" @onclick="() => Saltar(outro.Id)">@outro.Nome</a>
+                            }
+                        }
+                    </div>
+                }
+                @if (demos.Count > 0)
+                {
+                    <div class="small">
+                        <span class="text-muted me-1">Aparece em:</span>
+                        @foreach (var d in demos)
+                        {
+                            <a class="me-1" href="@d.Url">@d.Titulo</a>
+                        }
+                    </div>
+                }
+            </div>
+        </section>
+    }
+}
+
+<p class="mt-4"><a href="demos">&larr; Todas as demos</a></p>
+
+@code {
+    private string filtro = "";
+    private string? destacado;   // termo para onde aponta o #fragmento do URL
+
+    protected override void OnInitialized()
+    {
+        destacado = FragmentoActual();
+        Nav.LocationChanged += AoMudarDeLocalizacao;
+    }
+
+    // a navegacao interna do Blazor usa pushState, que nao activa o :target do CSS: o destaque faz-se aqui
+    private void AoMudarDeLocalizacao(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        destacado = FragmentoActual();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string? FragmentoActual()
+    {
+        var fragmento = new Uri(Nav.Uri).Fragment.TrimStart('#');
+        return string.IsNullOrEmpty(fragmento) ? null : fragmento;
+    }
+
+    private IJSObjectReference? modulo;
+    private string? scrollPara;
+
+    // clique num link dentro desta pagina: destacar o termo e fazer scroll ate ele (depois do render)
+    private void Saltar(string id)
+    {
+        destacado = id;
+        scrollPara = id;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (scrollPara is null) return;
+
+        var id = scrollPara;
+        scrollPara = null;
+        try
+        {
+            modulo ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/glossario.js");
+            await modulo.InvokeVoidAsync("scrollParaTermo", id);
+        }
+        catch (JSDisconnectedException)
+        {
+            // o circuit foi fechado entretanto: nada a fazer
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Nav.LocationChanged -= AoMudarDeLocalizacao;
+        if (modulo is not null)
+        {
+            try { await modulo.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    private List<TermoGlossario> visiveis =>
+        string.IsNullOrWhiteSpace(filtro)
+            ? GlossarioDados.Termos.ToList()
+            : GlossarioDados.Termos.Where(Corresponde).ToList();
+
+    private bool Corresponde(TermoGlossario t)
+    {
+        var procura = Normalizar(filtro);
+        return Normalizar(t.Nome).Contains(procura)
+            || Normalizar(GlossarioDados.EmPortuguesDe(t.Id) ?? "").Contains(procura)
+            || Normalizar(t.Definicao).Contains(procura);
+    }
+
+    // pesquisa sem diferenca entre maiusculas/minusculas nem acentos
+    private static string Normalizar(string texto)
+    {
+        var decomposto = texto.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(decomposto.Length);
+        foreach (var c in decomposto)
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        return sb.ToString();
+    }
+
+    private static string IdGrupo(string grupo) => "grupo-" + Normalizar(grupo).Replace(' ', '-').Replace(",", "");
+
+    // as definicoes usam `codigo` entre acentos graves: faz-se primeiro o HTML encoding de tudo e so depois se
+    // convertem os pares de acentos graves em <code> (por isso o resultado e seguro de mostrar como MarkupString)
+    private static MarkupString Formatar(string texto)
+    {
+        var codificado = WebUtility.HtmlEncode(texto);
+        var html = Regex.Replace(codificado, "`([^`]+)`", "<code>$1</code>");
+        return new MarkupString(html);
+    }
+}

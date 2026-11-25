@@ -1,0 +1,66 @@
+@page "/demos/bind"
+
+<DemoPagina Slug="bind" Titulo='@("@bind vs @bind:event")'
+            Objetivo="perceber QUANDO o valor escrito no campo chega à variável C#.">
+    <ChildContent>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <label class="form-label"><code>@@bind</code> (actualiza ao SAIR do campo)</label>
+                <input class="form-control" @bind="textoChange" />
+                <div class="mt-2">Valor em C#: <strong>@textoChange</strong></div>
+                <div class="text-muted small">Actualizações recebidas: @contaChange</div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label"><code>@@bind:event="oninput"</code> (actualiza a CADA tecla)</label>
+                <input class="form-control" @bind="textoInput" @bind:event="oninput" />
+                <div class="mt-2">Valor em C#: <strong>@textoInput</strong></div>
+                <div class="text-muted small">Actualizações recebidas: @contaInput</div>
+            </div>
+        </div>
+
+        <hr />
+        <h2 class="h6">Outros tipos e formatos</h2>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Número (int)</label>
+                <input type="number" class="form-control" @bind="numero" @bind:event="oninput" />
+                <div class="mt-1">C# vê: <strong>@numero</strong> (<code>int</code>)</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Data com formato</label>
+                <input class="form-control" @bind="data" @bind:format="dd/MM/yyyy" />
+                <div class="mt-1">C# vê: <strong>@data.ToString("yyyy-MM-dd")</strong></div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Caixa de verificação</label>
+                <div class="form-check">
+                    <input id="chk" type="checkbox" class="form-check-input" @bind="activo" />
+                    <label for="chk" class="form-check-label">Activo</label>
+                </div>
+                <div class="mt-1">C# vê: <strong>@activo</strong></div>
+            </div>
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><code>@@bind</code> sozinho usa o evento <code>onchange</code>: o valor só chega ao C# quando o campo perde o foco (ou se carrega Enter).</li>
+            <li><code>@@bind:event="oninput"</code> usa o evento <code>oninput</code>: o C# recebe cada tecla. Útil para pesquisas ao vivo, mas gera mais tráfego (em Blazor Server, uma mensagem SignalR por tecla).</li>
+            <li><code>@@bind</code> faz conversão automática de tipos (<code>int</code>, <code>DateTime</code>, <code>bool</code>…) e <code>@@bind:format</code> controla como a data é mostrada.</li>
+            <li>Se o texto não puder ser convertido (por exemplo, letras num <code>int</code>), o valor em C# mantém-se. Nos formulários, é o <code>InputNumber</code> que mostra erro de validação.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private string textoChange { get => _change; set { _change = value; contaChange++; } }
+    private string _change = "";
+    private int contaChange;
+
+    private string textoInput { get => _input; set { _input = value; contaInput++; } }
+    private string _input = "";
+    private int contaInput;
+
+    private int numero = 10;
+    private DateTime data = DateTime.Today;
+    private bool activo = true;
+}

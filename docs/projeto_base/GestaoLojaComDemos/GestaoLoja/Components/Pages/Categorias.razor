@@ -1,0 +1,135 @@
+﻿@page "/categorias"
+
+@using GestaoLoja.Data
+@using GestaoLoja.Entities
+@using Microsoft.EntityFrameworkCore
+@* SE QUISESSEMOS USAR UMA FACTORY  
+    @inject IDbContextFactory<ApplicationDbContext> DbFactory *@
+
+@* USANDO DIRECTAMENTE O CONTEXTO DEFINIDO PELO ApplicationDBContext (nao é a melhor prática)  *@
+@inject GestaoLoja.Data.ApplicationDbContext MyDbContext
+<h3>Gestao de Categorias</h3>
+
+
+<EditForm Model="@categoriaForm" OnValidSubmit="GuardarAsync">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+    <InputText @bind-Value="categoriaForm.Nome"></InputText>
+
+    @* o mesmo formulário serve para criar (Id == 0) e para editar (Id != 0) *@
+    <button>@(categoriaForm.Id == 0 ? "Criar categoria" : "Guardar alterações")</button>
+    @if (categoriaForm.Id != 0)
+    {
+        <button type="button" @onclick="Cancelar">Cancelar</button>
+    }
+</EditForm>
+
+@if (mensagem is not null)
+{
+    <p style="color:red">@mensagem</p>
+}
+
+@if (categorias is null)
+{
+    <p>... a carregar categorias</p>
+}
+else
+{
+    <table cellpadding="10" border="1">
+        <thead>
+            <tr>
+            <th>Id</th>
+            <th>Nome</th>
+            <th>Opcoes</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var categoria in categorias)
+            {
+                <tr>
+                    <td>@categoria.Id</td>
+                    <td>@categoria.Nome</td>
+                    <td>
+                        <button @onclick="() => Editar(categoria)">Editar</button>
+                        <button @onclick="() => ApagarAsync(categoria)">Apagar</button>
+                       </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Categoria>? categorias;
+
+    private Categoria categoriaForm = new Categoria();
+
+    private string? mensagem;
+
+    private void Editar(Categoria categoria)
+    {
+        mensagem = null;
+        // copiamos os dados para o formulário (assim, se cancelarmos, a lista não fica alterada)
+        categoriaForm = new Categoria { Id = categoria.Id, Nome = categoria.Nome };
+    }
+
+    private void Cancelar()
+    {
+        categoriaForm = new Categoria();
+    }
+
+    private async Task ApagarAsync(Categoria categoria)
+    {
+        mensagem = null;
+
+        if (categoria.Produtos.Any())
+        {
+            // tenho produtos nao posso apagar a categoria
+            mensagem = "Não é possível apagar a categoria '" + categoria.Nome + "': tem produtos associados.";
+        }
+        else
+        {
+            // nao tenho produtos associados à categoria -> posso apagar a categoria
+            MyDbContext.Categorias.Remove(categoria);
+            await MyDbContext.SaveChangesAsync();
+
+            if (categoriaForm.Id == categoria.Id)
+                categoriaForm = new Categoria(); // estava a ser editada: limpar o formulário
+
+            await CarregarAsync();
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        mensagem = null;
+
+        if (categoriaForm.Id == 0)
+        {
+            // Id == 0 -> categoria nova
+            MyDbContext.Categorias.Add(categoriaForm);
+        }
+        else
+        {
+            // Id != 0 -> estamos a editar.
+            // A categoria original já foi lida por este contexto (está na lista), por isso o contexto
+            // "está a vigiá-la" (tracking): basta alterar o Nome e o SaveChanges descobre a alteração.
+            var original = categorias!.First(c => c.Id == categoriaForm.Id);
+            original.Nome = categoriaForm.Nome;
+        }
+
+        await MyDbContext.SaveChangesAsync();
+        categoriaForm = new Categoria(); // cria novo objecto para podermos adicionar nova categoria
+        // depois de guardarmos os dados queremos carregar a lista novamente
+        await CarregarAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarAsync();
+    }
+    private async Task CarregarAsync() =>
+        // await using var context = await DbFactory.CreateDbContextAsync();
+        categorias = await MyDbContext.Categorias.Include(c=>c.Produtos).ToListAsync();
+
+}

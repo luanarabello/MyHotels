@@ -1,0 +1,37 @@
+@implements IDisposable
+
+@* Componente filho que regista cada evento do seu lifecycle no RegistoCicloVida partilhado com o pai *@
+<div class="border rounded p-2 bg-light">
+    Componente filho (Valor = <strong>@Valor</strong>)
+</div>
+
+@code {
+    [Parameter] public int Valor { get; set; }
+    [Parameter, EditorRequired] public RegistoCicloVida Registo { get; set; } = default!;
+
+    private void Registar(string evento) => Registo.Adicionar(evento);
+
+    public override async Task SetParametersAsync(ParameterView parameters)
+    {
+        // o parametro Registo ainda nao foi atribuido: ler directamente do ParameterView
+        if (parameters.TryGetValue<RegistoCicloVida>(nameof(Registo), out var registo))
+            registo.Adicionar("SetParametersAsync (os parâmetros acabaram de chegar)");
+        await base.SetParametersAsync(parameters);
+    }
+
+    protected override void OnInitialized() => Registar("OnInitialized (só uma vez, na criação)");
+
+    protected override async Task OnInitializedAsync()
+    {
+        Registar("OnInitializedAsync (início)");
+        await Task.Delay(50);
+        Registar("OnInitializedAsync (fim)");
+    }
+
+    protected override void OnParametersSet() => Registar($"OnParametersSet (Valor = {Valor})");
+
+    protected override void OnAfterRender(bool firstRender) =>
+        Registar($"OnAfterRender (firstRender = {firstRender})");
+
+    public void Dispose() => Registar("Dispose (o componente foi removido)");
+}

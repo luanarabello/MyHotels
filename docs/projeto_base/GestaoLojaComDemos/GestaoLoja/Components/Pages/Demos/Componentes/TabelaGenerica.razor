@@ -1,0 +1,30 @@
+@typeparam TItem
+
+@* Tabela generica: serve para qualquer tipo. A pagina fornece o cabecalho e o desenho de cada linha. *@
+@if (Items is null)
+{
+    <p><em>A carregar...</em></p>
+}
+else if (!Items.Any())
+{
+    @(Vazio ?? (builder => builder.AddContent(0, "Sem dados.")))
+}
+else
+{
+    <table class="table table-sm table-striped">
+        <thead><tr>@Cabecalho</tr></thead>
+        <tbody>
+            @foreach (var item in Items)
+            {
+                <tr>@Linha(item)</tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public IEnumerable<TItem>? Items { get; set; }
+    [Parameter, EditorRequired] public RenderFragment Cabecalho { get; set; } = default!;
+    [Parameter, EditorRequired] public RenderFragment<TItem> Linha { get; set; } = default!;
+    [Parameter] public RenderFragment? Vazio { get; set; }
+}

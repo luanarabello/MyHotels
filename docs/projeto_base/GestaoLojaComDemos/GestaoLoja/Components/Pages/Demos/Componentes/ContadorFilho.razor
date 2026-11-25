@@ -1,0 +1,12 @@
+@* Filho: recebe dados por [Parameter] e avisa o pai por EventCallback *@
+<div class="border rounded p-2">
+    <div>Filho: recebi <code>Valor = @Valor</code> do pai.</div>
+    <button class="btn btn-sm btn-primary mt-1" @onclick="Incrementar">Filho pede +1 ao pai</button>
+</div>
+
+@code {
+    [Parameter] public int Valor { get; set; }
+    [Parameter] public EventCallback<int> OnIncrementar { get; set; }
+
+    private Task Incrementar() => OnIncrementar.InvokeAsync(Valor + 1);
+}

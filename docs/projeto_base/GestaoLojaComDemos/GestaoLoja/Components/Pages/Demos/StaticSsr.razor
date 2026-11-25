@@ -1,0 +1,20 @@
+@page "/demos/static-ssr"
+
+<DemoPagina Slug="static-ssr" Titulo="Static SSR vs Interactive Server (versão static SSR)"
+            Objetivo="ver como se comporta um formulário numa página sem circuit Blazor.">
+    <ChildContent>
+        <p>
+            Esta é a versão <strong>static SSR</strong> (excluída do modo Interactive Server no <code>App.razor</code>).
+            Compare com a <a href="demos/ssr-interativo">versão Interactive Server</a>: é exactamente o mesmo componente.
+        </p>
+        <FormularioDemo NomeFormulario="static-demo" />
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li>Em <strong>static SSR</strong> a página é HTML gerado no servidor e termina aí. Não há SignalR, por isso <code>@@onclick</code> não funciona, e os formulários usam POST HTTP normal (por isso o <code>FormName</code> e o <code>[SupplyParameterFromForm]</code> que o scaffold gera).</li>
+            <li>Em <strong>Interactive Server</strong> existe um circuit SignalR por utilizador (por separador do browser): eventos, binding e <code>StateHasChanged</code> funcionam, sem recarregar a página.</li>
+            <li>Nas páginas do Identity (<code>/Account/*</code>) o projecto usa static SSR de propósito: precisam de ler e escrever cookies, o que só se pode fazer num pedido HTTP normal.</li>
+            <li>Como escolher: static SSR para páginas que mostram dados ou submetem formulários (e para o Identity); Interactive Server quando a UI tem de reagir a eventos sem recarregar a página. Nenhum dos dois é, por si só, mais seguro. Pode misturar os dois na mesma aplicação.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>

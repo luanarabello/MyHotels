@@ -1,0 +1,20 @@
+@page "/demos/ssr-interativo"
+
+<DemoPagina Slug="ssr-interativo" Titulo="Static SSR vs Interactive Server (versão Interactive Server)"
+            Objetivo="ver o mesmo componente numa página com circuit SignalR.">
+    <ChildContent>
+        <p>
+            Esta é a versão <strong>Interactive Server</strong>. Compare com a <a href="demos/static-ssr">versão static SSR</a>:
+            o componente é o mesmo, só o render mode muda.
+        </p>
+        <FormularioDemo NomeFormulario="interativo-demo" />
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li>O botão funciona e actualiza o contador, porque o evento viaja pelo circuit SignalR.</li>
+            <li>Enviar o formulário não faz POST nem recarrega a página: o evento viaja pelo circuit.</li>
+            <li>O contador "<code>OnParametersSet</code> chamado" não conta renders: só sobe quando o Blazor volta a entregar parâmetros ao componente (neste, só na criação). Por isso fica em 1 mesmo depois de vários cliques, que provocam re-renders.</li>
+            <li>O <code>HttpContext</code> deixa de existir depois de o circuit ligar. Por isso não se deve depender dele em componentes Interactive Server. A primeira linha da lista, "<code>OnAfterRender</code> já correu?", muda de "não" para "sim" quando o circuit liga, porque o <em>prerender</em> inicial também é static.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>

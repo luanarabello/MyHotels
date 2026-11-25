@@ -1,0 +1,65 @@
+@page "/demos/eventos-form"
+
+<DemoPagina Slug="eventos-form" Titulo="Eventos do EditForm"
+            Objetivo="ver quando disparam OnValidSubmit, OnInvalidSubmit e OnSubmit.">
+    <ChildContent>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <h2 class="h6">Formulário A: <code>OnValidSubmit</code> + <code>OnInvalidSubmit</code></h2>
+                <EditForm Model="a" OnValidSubmit="() => valid++" OnInvalidSubmit="() => invalid++" FormName="eventosA">
+                    <DataAnnotationsValidator />
+                    <InputText class="form-control mb-2" @bind-Value="a.Nome" placeholder="Nome (obrigatório)" />
+                    <ValidationMessage For="() => a.Nome" />
+                    <button class="btn btn-primary btn-sm" type="submit">Enviar</button>
+                </EditForm>
+                <ul class="mt-2 mb-0">
+                    <li>OnValidSubmit: <strong>@valid</strong></li>
+                    <li>OnInvalidSubmit: <strong>@invalid</strong></li>
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h2 class="h6">Formulário B: só <code>OnSubmit</code> (validação manual)</h2>
+                <EditForm EditContext="contextoB" OnSubmit="SubmeterB" FormName="eventosB">
+                    <DataAnnotationsValidator />
+                    <InputText class="form-control mb-2" @bind-Value="b.Nome" placeholder="Nome (obrigatório)" />
+                    <ValidationMessage For="() => b.Nome" />
+                    <button class="btn btn-primary btn-sm" type="submit">Enviar</button>
+                </EditForm>
+                <ul class="mt-2 mb-0">
+                    <li>OnSubmit chamado: <strong>@submitB</strong> vez(es)</li>
+                    <li>Resultado da última validação manual: <strong>@resultadoB</strong></li>
+                </ul>
+            </div>
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li>Com <code>OnValidSubmit</code>/<code>OnInvalidSubmit</code> o Blazor valida por si e chama <em>só um</em> dos dois. É a forma mais comum e a mais simples.</li>
+            <li>Com <code>OnSubmit</code> o Blazor chama sempre o seu método, mesmo com erros. Cabe-lhe a si chamar <code>EditContext.Validate()</code>. Útil quando a validação tem passos extra.</li>
+            <li>Não se pode combinar <code>OnSubmit</code> com <code>OnValidSubmit</code> no mesmo formulário (o Blazor lança uma excepção).</li>
+            <li>O <code>DataAnnotationsValidator</code> é que liga os atributos <code>[Required]</code>… ao formulário. Sem ele, nada é validado.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private Modelo a = new();
+    private Modelo b = new();
+    private EditContext contextoB = default!;
+    private int valid, invalid, submitB;
+    private string resultadoB = "-";
+
+    protected override void OnInitialized() => contextoB = new EditContext(b);
+
+    private void SubmeterB(EditContext ctx)
+    {
+        submitB++;
+        resultadoB = ctx.Validate() ? "válido" : "inválido";
+    }
+
+    private class Modelo
+    {
+        [Required(ErrorMessage = "O nome é obrigatório.")]
+        public string? Nome { get; set; }
+    }
+}

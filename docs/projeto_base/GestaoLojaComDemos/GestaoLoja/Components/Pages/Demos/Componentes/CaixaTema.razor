@@ -1,0 +1,8 @@
+@* Consome um valor em cascata: nao recebe nada por [Parameter] explicito, mesmo estando varios niveis abaixo *@
+<div class="p-2 rounded border @(Tema == "escuro" ? "bg-dark text-light" : "bg-light")">
+    Neto: o tema (cascading value) é <strong>@Tema</strong> (não me foi passado como parâmetro).
+</div>
+
+@code {
+    [CascadingParameter(Name = "Tema")] public string Tema { get; set; } = "claro";
+}

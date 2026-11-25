@@ -1,0 +1,81 @@
+@page "/demos"
+
+<PageTitle>ISEC\PWEB - Demos</PageTitle>
+
+<h1>ISEC\PWEB - Demos</h1>
+<p class="lead">
+    Páginas pequenas que mostram, a funcionar, conceitos importantes de Blazor, Entity Framework e Identity.
+    Cada uma tem uma demonstração e uma explicação. As demos de Entity Framework que escrevem dados usam uma BD isolada
+    (<code>Data/demos.db</code>); as que usam a BD da loja ("DbContext injectado vs Factory" e "Migrations") só a lêem.
+    Nenhuma altera os dados reais da loja (Ficha 3, 4 e 5).
+</p>
+
+<div class="alert alert-primary d-flex align-items-center justify-content-between">
+    <span>Há termos que não conhece? Veja o <strong>glossário</strong> de conceitos e termos técnicos, com pesquisa.</span>
+    <a class="btn btn-primary btn-sm ms-3" href="demos/glossario">Abrir o glossário</a>
+</div>
+
+@foreach (var grupo in Grupos)
+{
+    <h2 class="h4 mt-4">@grupo.Titulo</h2>
+    <div class="row row-cols-1 row-cols-md-2 g-3">
+        @foreach (var d in grupo.Demos)
+        {
+            <div class="col">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="h6 card-title"><a href="@d.Url">@d.Titulo</a></h3>
+                        <p class="card-text small mb-0">@d.Resumo</p>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private record Demo(string Url, string Titulo, string Resumo);
+    private record Grupo(string Titulo, Demo[] Demos);
+
+    private static readonly Grupo[] Grupos =
+    [
+        new("Formulários, binding e validação",
+        [
+            new("demos/bind", "@bind vs @bind:event", "Quando é que o valor do campo chega ao C#."),
+            new("demos/binding-manual", "Binding manual vs @bind", "O que o @bind faz por baixo."),
+            new("demos/validacao", "Validação em camadas", "DataAnnotations, IValidatableObject e validação personalizada."),
+            new("demos/eventos-form", "Eventos do EditForm", "OnValidSubmit, OnInvalidSubmit e OnSubmit."),
+            new("demos/static-ssr", "Static SSR vs Interactive Server", "Porque é que um botão não faz nada numa página static SSR."),
+            new("demos/static-overposting", "Over-posting", "Um atacante altera campos que o formulário não mostra."),
+        ]),
+        new("Lifecycle e render",
+        [
+            new("demos/ciclo-vida", "Lifecycle de um componente", "OnInitialized, OnParametersSet, OnAfterRender, Dispose."),
+            new("demos/prerender", "Prerender e perda de estado", "Porque é que o valor muda ao ligar o circuit."),
+            new("demos/invoke-async", "StateHasChanged e InvokeAsync", "Actualizar a UI a partir de outra thread."),
+            new("demos/di-tempo-vida", "Lifetime da DI", "Singleton, Scoped e Transient lado a lado."),
+        ]),
+        new("Entity Framework",
+        [
+            new("demos/concorrencia", "DbContext injectado vs Factory", "Falha por concurrency num DbContext partilhado."),
+            new("demos/n-mais-1", "N+1 e Include", "Quantas queries SQL são realmente executadas."),
+            new("demos/tracking", "Tracking e stale data", "Um DbContext long-lived guarda o passado."),
+            new("demos/concorrencia-optimista", "Optimistic concurrency", "Dois utilizadores a editar o mesmo registo."),
+            new("demos/cascade-restrict", "Cascade vs Restrict", "O que acontece ao apagar uma categoria com produtos."),
+            new("demos/migrations", "Migrations aplicadas e pendentes", "Estado real da base de dados."),
+        ]),
+        new("Identity e segurança",
+        [
+            new("demos/identidade", "Quem sou eu?", "User.Identity, claims e roles."),
+            new("demos/autorizacao", "Antes e depois de proteger", "AuthorizeView, roles e [Authorize]."),
+            new("demos/xss", "XSS e MarkupString", "Texto HTML-encoded vs HTML perigoso."),
+            new("demos/upload-inseguro", "Upload inseguro", "Porque nunca se usa o nome do ficheiro do utilizador."),
+        ]),
+        new("Padrões de componentes",
+        [
+            new("demos/comunicacao", "Comunicação entre componentes", "Parameter, EventCallback, CascadingValue e serviço com evento."),
+            new("demos/componentes-genericos", "Componentes genéricos", "@typeparam e RenderFragment<T>."),
+            new("demos/js-interop", "JS interop", "Chamar JavaScript a partir de C# e quando é possível."),
+        ]),
+    ];
+}

@@ -1,0 +1,14 @@
+/* destaca o termo para onde aponta o #fragmento do URL (a classe e posta pelo componente: com a navegacao
+   interna do Blazor o :target do CSS nao e actualizado) */
+.termo-destacado {
+    background-color: #fff3cd;
+    border-color: #ffda6a;
+}
+
+.termo {
+    scroll-margin-top: 1rem;
+}
+
+h2[id] {
+    scroll-margin-top: 1rem;
+}

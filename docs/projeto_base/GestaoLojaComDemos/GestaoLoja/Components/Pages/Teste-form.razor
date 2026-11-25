@@ -1,0 +1,134 @@
+﻿@page "/categorias-teste"
+
+@using GestaoLoja.Data
+@using GestaoLoja.Entities
+@using Microsoft.EntityFrameworkCore
+@* SE QUISESSEMOS USAR UMA FACTORY  
+    @inject IDbContextFactory<ApplicationDbContext> DbFactory *@
+
+@* USANDO DIRECTAMENTE O CONTEXTO DEFINIDO PELO ApplicationDBContext  *@
+@inject GestaoLoja.Data.ApplicationDbContext MyDbContext
+<h3>Gestao de Categorias</h3>
+
+<!-- Formulário para Criar / Editar -->
+<div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; max-width: 400px;">
+    <h4>@(categoriaForm.Id == 0 ? "Nova Categoria" : "Editar Categoria")</h4>
+    <EditForm Model="categoriaForm" OnValidSubmit="GuardarCategoriaAsync">
+        <div style="margin-bottom: 10px;">
+            <label>Nome:</label>
+            <InputText @bind-Value="categoriaForm.Nome" class="form-control" />
+        </div>
+        <button type="submit" style="background-color: green; color: white;">Guardar</button>
+        @if (categoriaForm.Id != 0)
+        {
+            <button type="button" @onclick="LimparFormulario" style="margin-left: 10px;">Cancelar</button>
+        }
+    </EditForm>
+</div>
+@if (categorias is null)
+{
+    <p>... a carregar categorias</p>
+}
+else
+{
+    <table cellpadding="10" border="1">
+        <thead>
+        <th>Id</th>
+        <th>Nome</th>
+        <th>Opcoes</th>
+        </thead>
+        <tbody>
+            @foreach (var categoria in categorias)
+            {
+                <tr>
+                    <td>@categoria.Id</td>
+                    <td>@categoria.Nome</td>
+                    <td>
+                        <button @onclick="() => PrepararEditar(categoria)" style="background-color: blue; color: white; margin-right: 5px;">Editar</button>
+                        <button @onclick="() => ApagarAsync(categoria.Id)" style="background-color: red; color: white;">Apagar</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+
+
+@code {
+    private List<Categoria>? categorias;
+
+    private Categoria categoriaForm = new Categoria();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CarregarAsync();
+    }
+    private async Task CarregarAsync()
+    {
+        // await using var context = await DbFactory.CreateDbContextAsync();
+        categorias = await MyDbContext.Categorias.ToListAsync();
+    }
+
+    // Criar ou Atualizar Registo
+    private async Task GuardarCategoriaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(categoriaForm.Nome)) return;
+
+        if (categoriaForm.Id == 0)
+        {
+            // Criar Nova Categoria
+            MyDbContext.Categorias.Add(categoriaForm);
+        }
+        else
+        {
+            // Atualizar Categoria Existente
+            var categoriaDb = await MyDbContext.Categorias.FindAsync(categoriaForm.Id);
+            if (categoriaDb != null)
+            {
+                categoriaDb.Nome = categoriaForm.Nome;
+                MyDbContext.Categorias.Update(categoriaDb);
+            }
+        }
+
+        await MyDbContext.SaveChangesAsync();
+        LimparFormulario();
+        await CarregarAsync(); // Recarrega a lista
+    }
+
+    // Preparar o formulário para edição
+    private void PrepararEditar(Categoria categoria)
+    {
+        // Criamos uma cópia para não alterar a tabela diretamente antes de guardar
+        categoriaForm = new Categoria
+        {
+            Id = categoria.Id,
+            Nome = categoria.Nome
+        };
+    }
+
+    // Apagar Registo
+    private async Task ApagarAsync(int id)
+    {
+        var categoria = await MyDbContext.Categorias.FindAsync(id);
+        if (categoria != null)
+        {
+            MyDbContext.Categorias.Remove(categoria);
+            await MyDbContext.SaveChangesAsync();
+            await CarregarAsync(); // Recarrega a lista
+
+            // Se estivéssemos a editar a categoria que foi apagada, limpa o formulário
+            if (categoriaForm.Id == id)
+            {
+                LimparFormulario();
+            }
+        }
+    }
+
+    private void LimparFormulario()
+    {
+        categoriaForm = new Categoria();
+    }
+
+}

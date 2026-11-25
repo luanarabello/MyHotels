@@ -1,0 +1,94 @@
+@page "/demos/prerender"
+@implements IDisposable
+@inject PersistentComponentState EstadoPersistente
+
+<DemoPagina Slug="prerender" Titulo="Prerender e perda de estado"
+            Objetivo="perceber porque é que um valor gerado na inicialização pode mudar quando o circuit liga.">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card h-100 border-danger">
+                    <div class="card-body">
+                        <h2 class="h6 text-danger">Sem persistir o estado</h2>
+                        <p class="display-6 mb-1">@valorNaivo</p>
+                        <p class="small mb-0">
+                            O gerador foi chamado <strong>@ChamadasNaivo</strong> vez(es) desde o arranque do servidor.
+                            Cada recarga da página soma <strong>2</strong>: uma no prerender e outra quando o circuit liga.
+                            Pode até notar o número a "saltar" quando a página acaba de carregar.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100 border-success">
+                    <div class="card-body">
+                        <h2 class="h6 text-success">Com <code>PersistentComponentState</code></h2>
+                        <p class="display-6 mb-1">@valorPersistente</p>
+                        <p class="small mb-0">
+                            O gerador foi chamado <strong>@ChamadasPersistente</strong> vez(es) desde o arranque do servidor.
+                            Cada recarga soma só <strong>1</strong>: o valor do prerender é reutilizado.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-outline-secondary btn-sm mt-3" @onclick="Repor">Repor contadores</button>
+        <span class="text-muted small ms-2">Depois recarregue a página (F5) e observe os contadores.</span>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li>Em Interactive Server, cada componente é criado <strong>duas vezes</strong>: no prerender (HTML estático) e quando o circuit liga. A 2.ª instância não herda o estado da 1.ª.</li>
+            <li>Efeitos visíveis: valores aleatórios que mudam, dados carregados duas vezes, "flash" de conteúdo.</li>
+            <li><strong>Soluções:</strong>
+                <ul>
+                    <li><code>PersistentComponentState</code> (esta demo): guardar o valor no prerender e lê-lo depois.</li>
+                    <li>Desligar o prerender: <code>new InteractiveServerRenderMode(prerender: false)</code>.</li>
+                    <li>Garantir que o código de inicialização é idempotente (pode correr duas vezes sem problema).</li>
+                </ul>
+            </li>
+            <li>Atenção: a query à BD no <code>OnInitializedAsync</code> também corre duas vezes: normalmente é inofensivo, mas é bom saber porquê.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private static int ChamadasNaivo;
+    private static int ChamadasPersistente;
+
+    private int valorNaivo;
+    private int valorPersistente;
+    private PersistingComponentStateSubscription subscricao;
+
+    protected override void OnInitialized()
+    {
+        // 1) sem persistir: gera sempre
+        valorNaivo = Random.Shared.Next(1000, 9999);
+        ChamadasNaivo++;
+
+        // 2) a persistir: so gera se nao houver valor guardado pelo prerender
+        subscricao = EstadoPersistente.RegisterOnPersisting(Persistir);
+        if (EstadoPersistente.TryTakeFromJson<int>("valorPersistente", out var guardado))
+        {
+            valorPersistente = guardado;
+        }
+        else
+        {
+            valorPersistente = Random.Shared.Next(1000, 9999);
+            ChamadasPersistente++;
+        }
+    }
+
+    private Task Persistir()
+    {
+        EstadoPersistente.PersistAsJson("valorPersistente", valorPersistente);
+        return Task.CompletedTask;
+    }
+
+    private void Repor()
+    {
+        ChamadasNaivo = 0;
+        ChamadasPersistente = 0;
+    }
+
+    public void Dispose() => subscricao.Dispose();
+}

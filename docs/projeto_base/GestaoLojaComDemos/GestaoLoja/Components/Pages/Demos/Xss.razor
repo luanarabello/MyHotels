@@ -1,0 +1,59 @@
+@page "/demos/xss"
+
+<DemoPagina Slug="xss" Titulo="XSS e MarkupString"
+            Objetivo="ver a diferença entre mostrar texto com HTML encoding e injectar HTML sem filtro.">
+    <ChildContent>
+        <label class="form-label">Texto "introduzido por um utilizador":</label>
+        <textarea class="form-control mb-3" rows="3" @bind="texto" @bind:event="oninput"></textarea>
+        <p class="small text-muted">
+            O texto inicial tem uma etiqueta <code>&lt;img&gt;</code> com um <code>onerror</code> que, se executar, muda o título do separador do browser.
+            Inofensivo aqui, mas é exactamente o mecanismo de um ataque XSS real.
+        </p>
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card h-100 border-success"><div class="card-body">
+                    <h2 class="h6 text-success">SEGURO: <code>@@texto</code> (HTML-encoded)</h2>
+                    <div class="border rounded p-2 bg-light">@texto</div>
+                    <p class="small mt-2 mb-0">O Blazor faz HTML encoding de tudo: o HTML aparece como texto, não é interpretado.</p>
+                </div></div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100 border-danger"><div class="card-body">
+                    <h2 class="h6 text-danger">PERIGOSO: <code>(MarkupString)texto</code></h2>
+                    @if (!perigoso)
+                    {
+                        <button class="btn btn-danger btn-sm" @onclick="() => perigoso = true">Mostrar como HTML (perigoso)</button>
+                    }
+                    else
+                    {
+                        <div class="border rounded p-2 bg-light">@((MarkupString)texto)</div>
+                        <button class="btn btn-outline-secondary btn-sm mt-2" @onclick="Repor">Repor</button>
+                    }
+                    <p class="small mt-2 mb-0">O HTML é interpretado tal como está. Se o título do separador mudou para "XSS executado!", o código do atacante correu.</p>
+                </div></div>
+            </div>
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><strong>XSS</strong> (<em>Cross-Site Scripting</em>): um atacante consegue que o seu JavaScript corra no browser de outro utilizador (ler dados da página, fazer pedidos em nome da vítima…). Os cookies marcados <code>HttpOnly</code>, como o do Identity, não são legíveis por JavaScript, mas o atacante continua a poder agir em nome da vítima.</li>
+            <li>Blazor está protegido por omissão: <code>@@variavel</code> e <code>@@(expressao)</code> são sempre <strong>HTML-encoded</strong>, isto é, tratados como texto.</li>
+            <li><code>MarkupString</code> desliga essa protecção. Só deve ser usado com HTML que controla (fixo) ou depois de limpo com uma biblioteca de sanitização (por exemplo <code>HtmlSanitizer</code>); <strong>nunca</strong> com texto vindo de utilizadores, da BD ou de APIs externas.</li>
+            <li>Mesmo noutras tecnologias a regra é a mesma: tratar tudo o que vem de fora como não confiável e fazer encoding à saída (<em>output encoding</em>).</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private const string Inicial = "<b>Olá!</b> <img src=\"x\" onerror=\"document.title='XSS executado!'\" alt=\"\">";
+
+    private string texto = Inicial;
+    private bool perigoso;
+
+    private void Repor()
+    {
+        perigoso = false;
+        texto = Inicial;
+    }
+}

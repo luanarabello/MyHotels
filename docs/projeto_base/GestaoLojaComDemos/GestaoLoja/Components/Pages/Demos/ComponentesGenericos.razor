@@ -1,0 +1,45 @@
+@page "/demos/componentes-genericos"
+@inject DemoDbService DemoDb
+
+<DemoPagina Slug="componentes-genericos" Titulo="Componentes genéricos"
+            Objetivo="reutilizar o MESMO componente de tabela com tipos de dados diferentes.">
+    <ChildContent>
+        <h2 class="h6">A mesma <code>TabelaGenerica</code>, com produtos (<code>DemoProduto</code>)</h2>
+        <TabelaGenerica Items="produtos">
+            <Cabecalho><th>Id</th><th>Nome</th><th>Preço</th></Cabecalho>
+            <Linha Context="p"><td>@p.Id</td><td>@p.Nome</td><td>@p.Preco.ToString("C")</td></Linha>
+        </TabelaGenerica>
+
+        <h2 class="h6 mt-3">…com texto (<code>string</code>)</h2>
+        <TabelaGenerica Items="cidades">
+            <Cabecalho><th>#</th><th>Cidade</th></Cabecalho>
+            <Linha Context="c"><td>@(Array.IndexOf(cidades, c) + 1)</td><td>@c</td></Linha>
+        </TabelaGenerica>
+
+        <h2 class="h6 mt-3">…e com uma lista vazia (mostra o conteúdo de <code>Vazio</code>)</h2>
+        <TabelaGenerica Items="Array.Empty<int>()">
+            <Cabecalho><th>Número</th></Cabecalho>
+            <Linha Context="n"><td>@n</td></Linha>
+            <Vazio><em class="text-muted">Não há números para mostrar.</em></Vazio>
+        </TabelaGenerica>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><code>@@typeparam TItem</code> torna o componente genérico, como <code>List&lt;T&gt;</code>. O compilador infere <code>TItem</code> a partir de <code>Items</code>.</li>
+            <li><code>RenderFragment</code> é um fragmento de UI passado como parâmetro. <code>RenderFragment&lt;TItem&gt;</code> é um fragmento de UI <em>que recebe um item</em>: é o que permite à página decidir como se desenha cada linha.</li>
+            <li><code>Context="p"</code> dá nome ao item dentro do template (por omissão chama-se <code>context</code>).</li>
+            <li>Isto é o padrão de componentes como <code>QuickGrid</code> ou <code>Virtualize</code>: a lógica (tabela, estados vazio/a carregar) fica no componente; o aspecto fica com quem o usa.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private List<DemoProduto>? produtos;
+    private readonly string[] cidades = ["Coimbra", "Lisboa", "Porto", "Faro"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var ctx = DemoDb.Criar();
+        produtos = await ctx.Produtos.AsNoTracking().OrderBy(p => p.Id).Take(6).ToListAsync();
+    }
+}

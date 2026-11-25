@@ -1,0 +1,88 @@
+@page "/demos/js-interop"
+@inject IJSRuntime JS
+
+<DemoPagina Slug="js-interop" Titulo="JS interop"
+            Objetivo="chamar JavaScript a partir de C#, e perceber QUANDO é possível fazê-lo.">
+    <ChildContent>
+        <h2 class="h6">1. Quando se pode chamar JS?</h2>
+        <p class="small mb-1">Tentativas registadas desde o arranque do servidor (as mais recentes em cima):</p>
+        <ul class="small">
+            @foreach (var t in Recentes())
+            {
+                <li>@t</li>
+            }
+        </ul>
+        <div class="text-muted small mb-3">
+            Recarregue a página (F5): cada carga acrescenta <strong>três</strong> linhas. A do prerender falha (não há browser). Depois, com o circuit
+            já ligado, funcionam tanto o <code>OnInitializedAsync</code> como o <code>OnAfterRenderAsync</code>.
+        </div>
+
+        <h2 class="h6">2. <code>alert</code> do browser</h2>
+        <button class="btn btn-outline-primary btn-sm mb-3" @onclick='() => JS.InvokeVoidAsync("alert", "Olá a partir do C#!")'>Mostrar alert</button>
+
+        <h2 class="h6">3. <code>localStorage</code> do browser</h2>
+        <div class="input-group mb-2">
+            <input class="form-control" @bind="valor" placeholder="valor a guardar" />
+            <button class="btn btn-primary" @onclick="Guardar">Guardar no localStorage</button>
+            <button class="btn btn-secondary" @onclick="Ler">Ler</button>
+        </div>
+        <div>Valor lido: <strong>@(lido ?? "(ainda não lido)")</strong></div>
+        <div class="text-muted small">Guarde, recarregue a página (F5) e carregue em "Ler": o valor persiste no browser, não no servidor.</div>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><code>IJSRuntime.InvokeVoidAsync("função", args)</code> chama JavaScript sem devolver valor; <code>InvokeAsync&lt;T&gt;</code> devolve um resultado. Pode chamar funções globais (<code>alert</code>) ou métodos encadeados (<code>localStorage.setItem</code>).</li>
+            <li><strong>Só é possível quando existe browser ligado.</strong> Durante o prerender o código corre no servidor: não há JavaScript. Nessa fase, chamar JS (por exemplo em <code>OnInitialized[Async]</code>) lança <code>InvalidOperationException: JavaScript interop calls cannot be issued at this time</code>. Depois de o circuit ligar já funciona (veja a lista acima).</li>
+            <li>Como o mesmo código de inicialização corre nas duas fases, o local certo para JS interop é <code>OnAfterRenderAsync(bool firstRender)</code> (só corre quando o componente já está no browser), ou em eventos da UI (cliques).</li>
+            <li>Cada chamada JS é um round-trip pela rede em Blazor Server: não as faça em ciclo apertado.</li>
+            <li><code>localStorage</code> guarda no browser do utilizador. Não é seguro nem secreto: nunca guarde aí palavras-passe ou dados sensíveis.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private static readonly List<string> Tentativas = new();
+    private string valor = "";
+    private string? lido;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // chamada em OnInitializedAsync: falha durante o prerender
+        try
+        {
+            await JS.InvokeVoidAsync("console.log", "teste em OnInitializedAsync");
+            Registar("OnInitializedAsync: OK (já havia browser)");
+        }
+        catch (InvalidOperationException ex)
+        {
+            Registar($"OnInitializedAsync: FALHOU ({ex.GetType().Name}: JS interop não disponível no prerender)");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await JS.InvokeVoidAsync("console.log", "teste em OnAfterRenderAsync");
+        Registar("OnAfterRenderAsync(firstRender): OK, o JS funciona aqui");
+        StateHasChanged();
+    }
+
+    private static List<string> Recentes()
+    {
+        lock (Tentativas)
+            return Enumerable.Reverse(Tentativas).Take(6).ToList();
+    }
+
+    private static void Registar(string t)
+    {
+        lock (Tentativas)
+        {
+            Tentativas.Add($"{DateTime.Now:HH:mm:ss}  {t}");
+            if (Tentativas.Count > 50) Tentativas.RemoveAt(0);
+        }
+    }
+
+    private async Task Guardar() => await JS.InvokeVoidAsync("localStorage.setItem", "demo-valor", valor);
+
+    private async Task Ler() => lido = await JS.InvokeAsync<string?>("localStorage.getItem", "demo-valor") ?? "(vazio)";
+}

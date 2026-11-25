@@ -1,0 +1,57 @@
+@page "/demos/binding-manual"
+
+<DemoPagina Slug="binding-manual" Titulo='@("Binding manual vs @bind")'
+            Objetivo='@("perceber o que o @bind faz por baixo, escrevendo o mesmo binding manualmente.")'>
+    <ChildContent>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <label class="form-label">Com <code>@@bind</code> (1 linha)</label>
+                <input class="form-control" @bind="valorA" @bind:event="oninput" />
+                <div class="mt-2">Valor: <strong>@valorA</strong></div>
+                <pre class="small bg-light p-2 mt-2">&lt;input @@bind="valorA" @@bind:event="oninput" /&gt;</pre>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Manual: <code>value</code> + <code>@@oninput</code></label>
+                <input class="form-control" value="@valorB" @oninput="AoEscrever" />
+                <div class="mt-2">Valor: <strong>@valorB</strong></div>
+                <pre class="small bg-light p-2 mt-2">&lt;input value="@@valorB" @@oninput="AoEscrever" /&gt;
+
+void AoEscrever(ChangeEventArgs e)
+    =&gt; valorB = e.Value?.ToString() ?? "";</pre>
+            </div>
+        </div>
+
+        <hr />
+        <h2 class="h6">One-way binding: só <code>value</code> (sem evento)</h2>
+        <input class="form-control mb-2" value="@valorC" />
+        <button class="btn btn-outline-secondary btn-sm" @onclick="MudarC">Mudar valor em C# (@(contaC))</button>
+        <div class="mt-2">Valor em C#: <strong>@valorC</strong></div>
+        <div class="text-muted small">
+            Escreva no campo: o C# não se apercebe (nada o avisa). Carregue no botão: o C# muda e o campo actualiza.
+            É binding só no sentido C# &rarr; HTML (one-way).
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><code>@@bind="x"</code> é <em>syntactic sugar</em>: equivale a <code>value="@@x"</code> (C# &rarr; HTML) mais um event handler que escreve o valor de volta em <code>x</code> (HTML &rarr; C#), com conversão de tipos e de formato. O resultado é <strong>two-way binding</strong>.</li>
+            <li>Com apenas <code>value="@@x"</code> o binding é <strong>one-way</strong>.</li>
+            <li>Escrever o binding manualmente é útil quando é preciso lógica extra a cada alteração (validar, formatar, chamar um serviço…).</li>
+            <li>Quando há conversão de tipos ou formatos, prefira <code>@@bind</code> ou os componentes <code>InputText</code>, <code>InputNumber</code>…</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private string valorA = "";
+    private string valorB = "";
+    private string valorC = "inicial";
+    private int contaC;
+
+    private void AoEscrever(ChangeEventArgs e) => valorB = e.Value?.ToString() ?? "";
+
+    private void MudarC()
+    {
+        contaC++;
+        valorC = $"valor {contaC}";
+    }
+}

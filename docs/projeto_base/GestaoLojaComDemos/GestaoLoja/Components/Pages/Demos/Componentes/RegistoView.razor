@@ -1,0 +1,15 @@
+@implements IDisposable
+
+@* Mostra o RegistoCicloVida. Faz render so de si proprio quando o registo muda: nao obriga o pai (nem o filho) a fazer render. *@
+<pre class="bg-dark text-light p-2 small" style="min-height:8rem">@string.Join("\n", Registo.Linhas)</pre>
+
+@code {
+    [Parameter, EditorRequired] public RegistoCicloVida Registo { get; set; } = default!;
+
+    protected override void OnInitialized() => Registo.Mudou += AoMudar;
+
+    // o evento e disparado a meio do render de outros componentes: InvokeAsync(StateHasChanged) agenda o render deste
+    private void AoMudar() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Registo.Mudou -= AoMudar;
+}

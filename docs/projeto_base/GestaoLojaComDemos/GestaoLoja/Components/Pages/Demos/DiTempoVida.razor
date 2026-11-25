@@ -1,0 +1,57 @@
+@page "/demos/di-tempo-vida"
+@inject DemoSingleton Singleton
+@inject DemoScoped Scoped
+@inject DemoTransient Transient
+
+<DemoPagina Slug="di-tempo-vida" Titulo="Lifetime da Dependency Injection (DI)"
+            Objetivo="ver quando é que a DI reutiliza uma instância e quando cria uma nova.">
+    <ChildContent>
+        <table class="table table-sm align-middle">
+            <thead>
+                <tr>
+                    <th>Quem recebeu</th>
+                    <th>Singleton</th>
+                    <th>Scoped</th>
+                    <th>Transient</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Esta página</td>
+                    <td><code>@Short(Singleton.Id)</code></td>
+                    <td><code>@Short(Scoped.Id)</code></td>
+                    <td><code>@Short(Transient.Id)</code></td>
+                </tr>
+                <MostraServicos Quem="Componente filho A" />
+                <MostraServicos Quem="Componente filho B" />
+            </tbody>
+        </table>
+
+        <p>Criados em: Singleton <strong>@Singleton.Criado.ToString("HH:mm:ss")</strong> |
+            Scoped <strong>@Scoped.Criado.ToString("HH:mm:ss")</strong></p>
+
+        <div class="alert alert-warning mb-0">
+            <strong>Experiência:</strong> abra esta página noutro separador do browser (ou numa janela anónima) e compare os valores.
+            Recarregue a página (F5) e veja o que muda.
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <table class="table table-sm">
+            <thead><tr><th>Lifetime</th><th>Instância nova quando…</th><th>Em Blazor Server</th></tr></thead>
+            <tbody>
+                <tr><td><code>AddSingleton</code></td><td>só uma vez: a primeira vez que é pedida (e dura até a aplicação parar)</td><td>igual para <strong>todos</strong> os utilizadores e separadores</td></tr>
+                <tr><td><code>AddScoped</code></td><td>por scope</td><td>um por <strong>circuit</strong> (separador do browser). Ao navegar dentro da app mantém-se; com F5 muda</td></tr>
+                <tr><td><code>AddTransient</code></td><td>sempre que é pedido</td><td>cada componente recebe a sua própria instância</td></tr>
+            </tbody>
+        </table>
+        <ul class="mb-0">
+            <li>É por um serviço Scoped durar o circuit inteiro que um <code>DbContext</code> injectado é problemático em Blazor Server (veja a demo "DbContext injectado vs Factory").</li>
+            <li>Um <code>Singleton</code> partilhado por todos tem de ser <strong>thread-safe</strong> e nunca deve guardar dados de um utilizador.</li>
+            <li>Um serviço Singleton não deve depender de um Scoped: em Development a DI faz <em>scope validation</em> e lança uma excepção.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private static string Short(Guid g) => g.ToString()[..8];
+}

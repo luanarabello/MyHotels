@@ -1,0 +1,123 @@
+@page "/demos/static-overposting"
+
+<DemoPagina Slug="static-overposting" Titulo="Over-posting"
+            Objetivo="ver como um atacante altera campos que o formulário nunca mostrou.">
+    <ChildContent>
+        <p class="text-muted small">
+            Página estática (formulários POST reais). O produto é guardado em memória e é partilhado por todos os visitantes: é só uma demo.
+        </p>
+
+        <div class="alert alert-secondary">
+            Produto actual: <strong>@Atual.Nome</strong> a <strong>@Atual.Preco.ToString("C")</strong>
+        </div>
+        @if (resposta is not null)
+        {
+            <div class="alert alert-warning">@resposta</div>
+        }
+
+        <div class="row g-4">
+            <div class="col-md-6">
+                <h2 class="h6 text-danger">INSEGURO: faz bind do formulário directamente à entidade</h2>
+                <form method="post" @formname="inseguro" @onsubmit="GravarInseguro">
+                    <AntiforgeryToken />
+                    <label class="form-label">Nome</label>
+                    <input class="form-control mb-2" name="Inseguro.Nome" value="@Atual.Nome" />
+                    <button class="btn btn-danger btn-sm" type="submit">Gravar (utilizador honesto)</button>
+                </form>
+                <form method="post" class="mt-2">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="_handler" value="inseguro" />
+                    <input type="hidden" name="Inseguro.Nome" value="Maçã" />
+                    <input type="hidden" name="Inseguro.Preco" value="0.01" />
+                    <button class="btn btn-outline-danger btn-sm" type="submit">Simular pedido forjado (Preco=0,01)</button>
+                </form>
+                <div class="text-muted small mt-1">
+                    O 1.º botão (utilizador honesto) só envia o nome, mas como este código substitui a entidade inteira, o preço fica a 0: é outro erro (perda de dados), não é over-posting.
+                    O 2.º é o over-posting: simula o que um atacante faz com as ferramentas do browser, acrescentando um campo que o formulário nunca mostrou, e o servidor aceita-o.
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h2 class="h6 text-success">SEGURO: um DTO só com os campos permitidos</h2>
+                <form method="post" @formname="seguro" @onsubmit="GravarSeguro">
+                    <AntiforgeryToken />
+                    <label class="form-label">Nome</label>
+                    <input class="form-control mb-2" name="Seguro.Nome" value="@Atual.Nome" />
+                    <button class="btn btn-success btn-sm" type="submit">Gravar (utilizador honesto)</button>
+                </form>
+                <form method="post" class="mt-2">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="_handler" value="seguro" />
+                    <input type="hidden" name="Seguro.Nome" value="Maçã" />
+                    <input type="hidden" name="Seguro.Preco" value="0.01" />
+                    <button class="btn btn-outline-success btn-sm" type="submit">Simular pedido forjado (Preco=0,01)</button>
+                </form>
+                <div class="text-muted small mt-1">
+                    O DTO não tem o campo <code>Preco</code>, por isso o valor forjado é simplesmente ignorado.
+                </div>
+            </div>
+        </div>
+
+        <form method="post" @formname="repor" @onsubmit="Repor" class="mt-3">
+            <AntiforgeryToken />
+            <button class="btn btn-link btn-sm" type="submit">Repor produto original</button>
+        </form>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><strong>Over-posting</strong>: o servidor faz bind de todos os campos que chegam no pedido às propriedades do modelo, mesmo os que o formulário nunca mostrou (<code>Preco</code>, <code>Id</code>, <code>IsAdmin</code>…).</li>
+            <li>Qualquer utilizador autenticado pode forjar um pedido com a sua própria sessão (ferramentas do browser, <code>curl</code>…). Esconder um campo no HTML <strong>não é</strong> segurança.</li>
+            <li><strong>Correcção:</strong> nunca fazer bind do formulário directamente à entidade da BD. Use um <em>DTO / ViewModel</em> só com os campos editáveis, e copie esses campos para a entidade (como fez o <code>Edit.razor</code> dos produtos).</li>
+            <li>As páginas geradas pelo scaffold têm um comentário sobre isto ("To protect from overposting attacks…") e merecem ser revistas quando há campos sensíveis.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private class ProdutoDemo
+    {
+        public string Nome { get; set; } = "Maçã";
+        public decimal Preco { get; set; } = 2.50m;
+    }
+
+    private class ProdutoDto
+    {
+        public string Nome { get; set; } = "";
+    }
+
+    // estado partilhado em memoria (demo)
+    private static ProdutoDemo Atual = new();
+
+    [SupplyParameterFromForm(FormName = "inseguro")]
+    private ProdutoDemo? Inseguro { get; set; }
+
+    [SupplyParameterFromForm(FormName = "seguro")]
+    private ProdutoDto? Seguro { get; set; }
+
+    private string? resposta;
+
+    private void GravarInseguro()
+    {
+        // ERRO classico: substituir a entidade pelo que veio do formulario
+        if (Inseguro is not null)
+        {
+            Atual = Inseguro;
+            resposta = $"Gravado (inseguro): nome='{Atual.Nome}', preço={Atual.Preco:C}.";
+        }
+    }
+
+    private void GravarSeguro()
+    {
+        // copia APENAS os campos permitidos
+        if (Seguro is not null)
+        {
+            Atual.Nome = Seguro.Nome;
+            resposta = $"Gravado (seguro): nome='{Atual.Nome}', preço={Atual.Preco:C} (o preço forjado foi ignorado).";
+        }
+    }
+
+    private void Repor()
+    {
+        Atual = new ProdutoDemo();
+        resposta = "Produto reposto.";
+    }
+}

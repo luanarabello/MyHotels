@@ -1,0 +1,130 @@
+@page "/demos/tracking"
+@implements IDisposable
+@inject DemoDbService DemoDb
+
+<DemoPagina Slug="tracking" Titulo="Tracking e stale data"
+            Objetivo="ver porque é que um DbContext long-lived pode mostrar stale data: dados que já mudaram na BD.">
+    <ChildContent>
+        <p class="small text-muted">
+            Esta página mantém um <strong>DbContext long-lived</strong> (como um <code>DbContext</code> injectado em Blazor Server).
+            Siga os passos pela ordem.
+        </p>
+
+        <ol class="mb-3">
+            <li class="mb-2">
+                <button class="btn btn-primary btn-sm" @onclick="LerLongo">Ler a 1.ª categoria com o DbContext long-lived</button>
+                <span class="ms-2">Nome visto: <strong>@(nomeLongo ?? "-")</strong></span>
+            </li>
+            <li class="mb-2">
+                <button class="btn btn-warning btn-sm" @onclick="OutroUtilizador">"Outro utilizador" renomeia a categoria na BD</button>
+                <span class="ms-2">Nome real na BD: <strong>@(nomeBd ?? "-")</strong></span>
+            </li>
+            <li class="mb-2">
+                <button class="btn btn-danger btn-sm" @onclick="LerLongo">Reler com o DbContext long-lived (com tracking)</button>
+                <span class="ms-2">Nome visto: <strong>@(nomeLongo ?? "-")</strong>
+                    @if (nomeLongo is not null && nomeBd is not null && nomeLongo != nomeBd)
+                    {
+                        <span class="badge bg-danger ms-1">STALE</span>
+                    }
+                </span>
+            </li>
+            <li class="mb-2">
+                <button class="btn btn-success btn-sm" @onclick="LerSemTracking">Reler com <code>AsNoTracking()</code></button>
+                <span class="ms-2">Nome visto: <strong>@(nomeSemTracking ?? "-")</strong></span>
+            </li>
+            <li class="mb-2">
+                <button class="btn btn-success btn-sm" @onclick="Recarregar">Reler com <code>Reload()</code></button>
+                <span class="ms-2">Nome visto: <strong>@(nomeReload ?? "-")</strong></span>
+            </li>
+        </ol>
+
+        <div class="alert alert-secondary">
+            Entidades em tracking no DbContext long-lived: <strong>@entidadesEmTracking</strong>
+        </div>
+
+        <hr />
+        <h2 class="h6">Alterar sem gravar</h2>
+        <button class="btn btn-outline-primary btn-sm" @onclick="AlterarSemGravar">Alterar o nome em memória (sem SaveChanges)</button>
+        @if (estadoEntidade is not null)
+        {
+            <ul class="mt-2">
+                <li>Estado da entidade no <em>change tracker</em>: <strong>@estadoEntidade</strong></li>
+                <li>Nome na memória do DbContext: <strong>@nomeMemoria</strong></li>
+                <li>Nome na BD (lido com outro DbContext): <strong>@nomeBd</strong></li>
+            </ul>
+        }
+        <button class="btn btn-link btn-sm" @onclick="Reiniciar">Reiniciar a BD de demonstração</button>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li>Com <strong>tracking</strong> (por omissão) o <code>DbContext</code> guarda cada entidade lida (<em>identity resolution</em>). Se voltar a executar a query, o EF <strong>vai à BD</strong>, mas ao ver uma linha cujo Id já está a ser seguido devolve a <strong>instância que já tinha</strong>, sem substituir os valores. Para actualizar essa instância é preciso <code>Reload()</code> (ou usar um <code>DbContext</code> novo, ou <code>AsNoTracking()</code>).</li>
+            <li>Num <code>DbContext</code> de curta duração (<code>IDbContextFactory</code>, um por operação) isto quase nunca é problema. Num <code>DbContext</code> que vive o circuit inteiro, é uma fonte de bugs difíceis de perceber ("na BD está certo, no ecrã não").</li>
+            <li><code>AsNoTracking()</code> não usa a identity resolution: devolve sempre valores frescos e é mais leve, por isso é ideal para listagens só de leitura. As entidades devolvidas não são seguidas, logo o <code>SaveChanges()</code> não detecta alterações feitas nelas (a menos que as ligue ao contexto com <code>Attach</code>/<code>Update</code>).</li>
+            <li>Alterar uma entidade em tracking não grava nada até chamar <code>SaveChanges()</code>. O estado passa a <code>Modified</code>. Se o <code>DbContext</code> for long-lived e nunca gravar (ou gravar tarde), essa alteração fica pendente e pode ser gravada por engano mais tarde.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private DemoDbContext<DemoMarker>? ctxLongo;
+    private DemoCategoria? categoriaLonga;
+    private string? nomeLongo, nomeBd, nomeSemTracking, nomeReload, nomeMemoria, estadoEntidade;
+    private int entidadesEmTracking;
+
+    private DemoDbContext<DemoMarker> Longo => ctxLongo ??= DemoDb.Criar();
+
+    private async Task LerLongo()
+    {
+        categoriaLonga = await Longo.Categorias.OrderBy(c => c.Id).FirstAsync();
+        nomeLongo = categoriaLonga.Nome;
+        Actualizar();
+    }
+
+    private async Task OutroUtilizador()
+    {
+        using var outro = DemoDb.Criar();
+        var novoNome = $"Frutas {DateTime.Now:HH:mm:ss}";
+        await outro.Categorias.Where(c => c.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(c => c.Nome, novoNome));
+        nomeBd = novoNome;
+    }
+
+    private async Task LerSemTracking()
+    {
+        var c = await Longo.Categorias.AsNoTracking().OrderBy(c => c.Id).FirstAsync();
+        nomeSemTracking = c.Nome;
+        Actualizar();
+    }
+
+    private async Task Recarregar()
+    {
+        if (categoriaLonga is null) { await LerLongo(); }
+        await Longo.Entry(categoriaLonga!).ReloadAsync();
+        nomeReload = categoriaLonga!.Nome;
+        Actualizar();
+    }
+
+    private async Task AlterarSemGravar()
+    {
+        if (categoriaLonga is null) { await LerLongo(); }
+        categoriaLonga!.Nome = "ALTERADO EM MEMORIA";
+        estadoEntidade = Longo.Entry(categoriaLonga).State.ToString();
+        nomeMemoria = categoriaLonga.Nome;
+        using var outro = DemoDb.Criar();
+        nomeBd = (await outro.Categorias.AsNoTracking().FirstAsync(c => c.Id == 1)).Nome;
+        Actualizar();
+    }
+
+    private void Reiniciar()
+    {
+        ctxLongo?.Dispose();
+        ctxLongo = null;
+        categoriaLonga = null;
+        nomeLongo = nomeBd = nomeSemTracking = nomeReload = nomeMemoria = estadoEntidade = null;
+        entidadesEmTracking = 0;
+        DemoDb.Reiniciar();
+    }
+
+    private void Actualizar() => entidadesEmTracking = Longo.ChangeTracker.Entries().Count();
+
+    public void Dispose() => ctxLongo?.Dispose();
+}

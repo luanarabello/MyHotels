@@ -1,0 +1,20 @@
+@page "/demos/invoke-async"
+
+<DemoPagina Slug="invoke-async" Titulo="StateHasChanged e InvokeAsync"
+            Objetivo="ver o que acontece quando se actualiza a UI a partir de outra thread (um timer).">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-md-6"><TimerDemo UsarInvokeAsync="false" /></div>
+            <div class="col-md-6"><TimerDemo UsarInvokeAsync="true" /></div>
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li>O Blazor tem um <strong>dispatcher</strong> (um synchronization context) por circuit: o código dos componentes executa um de cada vez, sem concorrência.</li>
+            <li>Os eventos da UI (<code>@@onclick</code>…) e os métodos do lifecycle já correm no dispatcher. Os callbacks de <code>System.Threading.Timer</code>, <code>Task.Run</code>, eventos de serviços, etc. <strong>não</strong>.</li>
+            <li>Nesses casos há que usar <code>await InvokeAsync(StateHasChanged)</code>, que muda para o dispatcher antes de fazer o render. Sem isso: <code>InvalidOperationException: The current thread is not associated with the Dispatcher</code>.</li>
+            <li>Cada timer está num componente separado de propósito: se partilhassem o mesmo componente, o <code>InvokeAsync</code> do timer "certo" faria render de tudo, incluindo o contador do timer "errado", e a falha ficava escondida.</li>
+            <li>Lembre-se de fazer <code>Dispose</code> do timer (veja <code>IDisposable</code> em <code>TimerDemo</code>); senão continua a correr depois de sair da página.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>

@@ -1,0 +1,98 @@
+@page "/demos/migrations"
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<DemoPagina Slug="migrations" Titulo="Migrations aplicadas e pendentes"
+            Objetivo="ver o estado real da base de dados da loja em relação às migrations do projecto.">
+    <ChildContent>
+        @if (erro is not null)
+        {
+            <div class="alert alert-danger">@erro</div>
+        }
+        else if (aplicadas is null)
+        {
+            <p><em>A carregar...</em></p>
+        }
+        else
+        {
+            <ul class="list-group mb-3">
+                <li class="list-group-item">Provider: <strong>@fornecedor</strong></li>
+                <li class="list-group-item"><code>CanConnect</code>: <strong>@(consegue ? "sim" : "não")</strong></li>
+                <li class="list-group-item">Connection string (sem credenciais): <code>@ligacao</code></li>
+            </ul>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <h2 class="h6">No projecto (<code>GetMigrations</code>)</h2>
+                    <ul class="small">
+                        @foreach (var m in noProjecto) { <li>@m</li> }
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h2 class="h6 text-success">Aplicadas (<code>GetAppliedMigrations</code>)</h2>
+                    <ul class="small">
+                        @foreach (var m in aplicadas) { <li>@m</li> }
+                        @if (!aplicadas.Any()) { <li class="text-muted">(nenhuma)</li> }
+                    </ul>
+                </div>
+                <div class="col-md-4">
+                    <h2 class="h6 text-danger">Pendentes (<code>GetPendingMigrations</code>)</h2>
+                    <ul class="small">
+                        @foreach (var m in pendentes) { <li>@m</li> }
+                        @if (!pendentes.Any()) { <li class="text-muted">(nenhuma: BD actualizada)</li> }
+                    </ul>
+                </div>
+            </div>
+        }
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li>Cada <code>Add-Migration</code> (ou <code>dotnet ef migrations add</code>) cria a classe da migration, com os passos para evoluir a BD (<code>Up</code>) e para voltar atrás (<code>Down</code>), e o ficheiro <code>.Designer.cs</code>, e actualiza o <code>ModelSnapshot</code>.</li>
+            <li>A BD guarda as migrations já aplicadas na tabela <code>__EFMigrationsHistory</code>. <code>Update-Database</code> (ou <code>dotnet ef database update</code>) aplica as <strong>pendentes</strong>.</li>
+            <li>Problemas típicos: mudar uma classe e <strong>esquecer-se</strong> de criar a migration (o modelo e a BD divergem, erros como "no such column" em SQLite); ou apagar/recriar as migrations sem apagar a BD que já tem as tabelas, ficando o histórico a não corresponder ao que existe (erro "table already exists").</li>
+            <li>Em produção costuma aplicar-se migrations de forma controlada (scripts, <code>dotnet ef migrations bundle</code>) e não com <code>Database.Migrate()</code> no arranque.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private IEnumerable<string>? aplicadas;
+    private IEnumerable<string> pendentes = Array.Empty<string>();
+    private IEnumerable<string> noProjecto = Array.Empty<string>();
+    private string? fornecedor, ligacao, erro;
+    private bool consegue;
+
+    // esta pagina nao tem [Authorize]: nunca mostrar utilizador/palavra-passe da connection string
+    private static string? SemCredenciais(string? connectionString)
+    {
+        if (string.IsNullOrEmpty(connectionString)) return connectionString;
+        try
+        {
+            var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
+            foreach (var chave in new[] { "Password", "Pwd", "User ID", "UserID", "Uid" })
+                builder.Remove(chave);
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return "(não disponível)";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var ctx = DbFactory.CreateDbContext();
+            fornecedor = ctx.Database.ProviderName;
+            ligacao = SemCredenciais(ctx.Database.GetConnectionString());
+            consegue = await ctx.Database.CanConnectAsync();
+            noProjecto = ctx.Database.GetMigrations().ToList();
+            aplicadas = (await ctx.Database.GetAppliedMigrationsAsync()).ToList();
+            pendentes = (await ctx.Database.GetPendingMigrationsAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            erro = ex.Message;
+        }
+    }
+}

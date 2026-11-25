@@ -1,0 +1,21 @@
+@page "/demos/admin-protegido"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize(Roles = "Admin")]
+
+<DemoPagina Slug="admin-protegido" Titulo="Página protegida (Admin)"
+            Objetivo="mostrar uma página que só utilizadores com a role Admin conseguem abrir.">
+    <ChildContent>
+        <div class="alert alert-success mb-0">
+            Se está a ver isto, tem a role <strong>Admin</strong>.
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <p class="mb-0">
+            O atributo <code>[Authorize(Roles = "Admin")]</code> faz com que esta página só seja apresentada a quem tiver essa role.
+            Quem não a tiver não a vê: um anónimo é redireccionado para o Login; um utilizador autenticado vai para <code>/Account/AccessDenied</code>
+            (URL directo) ou, se chegar por um link dentro da aplicação, vê "Acesso negado" (o <code>Routes.razor</code> só envia para o Login quem ainda não está autenticado).
+            Para a ver, entre como <code>admin@gestaoloja.pt</code> (utilizador de teste, ver o <code>README.md</code>).
+            Veja a demo "Antes e depois de proteger".
+        </p>
+    </Explicacao>
+</DemoPagina>

@@ -1,0 +1,57 @@
+@page "/demos/ciclo-vida"
+
+<DemoPagina Slug="ciclo-vida" Titulo="Lifecycle de um componente"
+            Objetivo="ver, pela ordem, os métodos que o Blazor chama num componente.">
+    <ChildContent>
+        <div class="mb-3">
+            <button class="btn btn-primary btn-sm me-1" @onclick="() => valor++">Mudar parâmetro do filho</button>
+            <button class="btn btn-secondary btn-sm me-1" @onclick="() => { }">Re-render do pai (parâmetros iguais)</button>
+            <button class="btn btn-warning btn-sm me-1" @onclick="() => mostrarFilho = !mostrarFilho">@(mostrarFilho ? "Remover filho" : "Criar filho")</button>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="registo.Limpar">Limpar registo</button>
+        </div>
+
+        @if (mostrarFilho)
+        {
+            <FilhoCicloVida Valor="valor" Registo="registo" />
+        }
+
+        <h2 class="h6 mt-3">Registo de eventos do filho</h2>
+        <RegistoView Registo="registo" />
+
+        <div class="alert alert-secondary mb-0">
+            <code>OnInitialized</code> desta <em>página</em> já foi chamado <strong>@InicializacoesPagina</strong> vez(es) desde que o servidor arrancou.
+            Recarregue a página (F5): sobe de <strong>2 em 2</strong>. Porquê? Veja a explicação.
+            (Se chegar aqui por um link dentro da aplicação, com o circuit já ligado, sobe só <strong>1</strong>: não há prerender.)
+        </div>
+    </ChildContent>
+    <Explicacao>
+        <ol>
+            <li><code>SetParametersAsync</code>: o Blazor entrega os parâmetros ao componente.</li>
+            <li><code>OnInitialized[Async]</code>: <strong>uma única vez</strong>, na criação. É onde normalmente se carregam dados.</li>
+            <li><code>OnParametersSet[Async]</code>: sempre que o pai faz render e os parâmetros <em>podem</em> ter mudado. Com tipos primitivos (como o <code>Valor</code>) o Blazor só chama quando o valor muda; com os restantes tipos (como o objecto <code>Registo</code> aqui) não consegue saber, e chama <strong>a cada render do pai</strong>. Experimente o 1.º e o 2.º botão e compare.</li>
+            <li><code>OnAfterRender[Async]</code>: depois de cada render, quando o DOM já está actualizado. Com <code>firstRender</code> aqui se faz JS interop.</li>
+            <li><code>Dispose</code>: quando o componente sai da página. Só é chamado se o componente implementar <code>IDisposable</code> (ou <code>IAsyncDisposable</code>). Aqui cancelam-se timers e subscriptions.</li>
+        </ol>
+        <p>
+            <strong>Atenção à ordem quando <code>OnInitializedAsync</code> é assíncrono</strong> (como no filho, que tem um <code>Task.Delay</code>):
+            o Blazor faz um primeiro render <em>enquanto</em> espera, por isso <code>OnAfterRender (firstRender = True)</code> aparece no registo
+            <em>antes</em> de <code>OnParametersSet</code>. Sem <code>await</code> a ordem é a da lista acima.
+        </p>
+        <p class="mb-0">
+            <strong>Porque é que o contador da página sobe de 2 em 2?</strong> Em Interactive Server o Blazor faz <em>prerender</em>: faz render da página
+            uma vez no servidor (para entregar HTML depressa) e, quando o circuit liga, cria o componente <em>de novo</em> e chama outra vez
+            <code>OnInitialized</code>. Qualquer código com efeitos (queries pesadas, contadores, chamadas externas) corre duas vezes.
+            A demo seguinte, <a href="demos/prerender">Prerender e perda de estado</a>, mostra como lidar com isso.
+        </p>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private static int InicializacoesPagina;
+
+    private int valor = 1;
+    private bool mostrarFilho = true;
+    private readonly RegistoCicloVida registo = new();
+
+    protected override void OnInitialized() => InicializacoesPagina++;
+}

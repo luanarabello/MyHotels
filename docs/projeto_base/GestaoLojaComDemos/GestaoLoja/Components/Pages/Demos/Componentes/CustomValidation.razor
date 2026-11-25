@@ -1,0 +1,32 @@
+@* Mostra mensagens de validacao vindas do "servidor" (ValidationMessageStore).
+   Padrao oficial da documentacao Blazor para validacao personalizada. *@
+@code {
+    private ValidationMessageStore? store;
+
+    [CascadingParameter]
+    private EditContext? CurrentEditContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (CurrentEditContext is null)
+            throw new InvalidOperationException("CustomValidation tem de estar dentro de um EditForm.");
+
+        store = new ValidationMessageStore(CurrentEditContext);
+        CurrentEditContext.OnValidationRequested += (s, e) => store.Clear();
+        CurrentEditContext.OnFieldChanged += (s, e) => store.Clear(e.FieldIdentifier);
+    }
+
+    public void MostrarErros(Dictionary<string, List<string>> erros)
+    {
+        if (CurrentEditContext is null || store is null) return;
+        foreach (var (campo, mensagens) in erros)
+            store.Add(CurrentEditContext.Field(campo), mensagens);
+        CurrentEditContext.NotifyValidationStateChanged();
+    }
+
+    public void Limpar()
+    {
+        store?.Clear();
+        CurrentEditContext?.NotifyValidationStateChanged();
+    }
+}

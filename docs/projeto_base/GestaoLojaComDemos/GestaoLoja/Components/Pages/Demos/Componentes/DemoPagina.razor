@@ -1,0 +1,41 @@
+<PageTitle>Demo: @Titulo</PageTitle>
+
+<h1>@Titulo</h1>
+
+<div class="alert alert-info">
+    <strong>O que vamos ver:</strong> @Objetivo
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><strong>Demonstração</strong></div>
+    <div class="card-body">
+        @ChildContent
+    </div>
+</div>
+
+@if (Explicacao is not null)
+{
+    <div class="card mb-4 border-primary">
+        <div class="card-header bg-primary text-white"><strong>Conceitos</strong></div>
+        <div class="card-body">
+            @Explicacao
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Slug))
+{
+    <CodigoDemo Slug="@Slug" />
+    <TermosPagina Slug="@Slug" />
+}
+
+<p><a href="demos">&larr; Todas as demos</a></p>
+
+@code {
+    // identifica a demo em GlossarioDados.TermosPorDemo (para mostrar os "Termos desta pagina")
+    [Parameter] public string? Slug { get; set; }
+    [Parameter, EditorRequired] public string Titulo { get; set; } = "";
+    [Parameter, EditorRequired] public string Objetivo { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Explicacao { get; set; }
+}

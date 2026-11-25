@@ -1,0 +1,22 @@
+﻿@using GestaoLoja.Components.Account.Shared
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                @if (context.User.Identity?.IsAuthenticated != true)
+                {
+                    @* anonimo: vai fazer login *@
+                    <RedirectToLogin />
+                }
+                else
+                {
+                    @* ja autenticado mas sem a role necessaria: mostra "acesso negado" (nao faz sentido pedir login outra vez) *@
+                    <h1 class="text-danger">Acesso negado</h1>
+                    <p role="alert">Não tem permissão para aceder a esta página.</p>
+                    <p><a href="">Voltar ao início</a></p>
+                }
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

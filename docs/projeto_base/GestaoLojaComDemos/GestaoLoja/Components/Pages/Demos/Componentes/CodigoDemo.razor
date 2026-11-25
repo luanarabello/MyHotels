@@ -1,0 +1,61 @@
+@inject CodigoFonteService Fonte
+
+@* Fundo de cada demo: mostra o codigo-fonte real dos ficheiros da demo (lista em CodigoFonteDados).
+   Usa so HTML (details/summary) e um onclick simples, por isso funciona tambem em paginas static SSR. *@
+@if (ficheiros.Count > 0)
+{
+    <div class="card mb-4">
+        <details>
+            <summary class="card-header bg-secondary text-white" style="cursor:pointer">
+                <strong>Código</strong>
+                <span class="small">(@ficheiros.Count @(ficheiros.Count == 1 ? "ficheiro" : "ficheiros"): clique para ver)</span>
+            </summary>
+            <div class="card-body p-2">
+                @for (var i = 0; i < ficheiros.Count; i++)
+                {
+                    var f = ficheiros[i];
+                    <details class="mb-2" open="@(i == 0)">
+                        <summary class="small">
+                            <code>@f.Caminho</code>
+                            @if (f.Linhas is not null) { <span class="text-muted ms-1">(@f.Linhas.Length linhas)</span> }
+                        </summary>
+                        @if (f.Texto is null)
+                        {
+                            <p class="small text-muted mb-0 mt-1">O código-fonte deste ficheiro não está disponível neste ambiente.</p>
+                        }
+                        else
+                        {
+                            <div class="text-end mb-1">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-codigo="@f.Texto"
+                                        onclick="navigator.clipboard.writeText(this.dataset.codigo).then(() => { const t = this.textContent; this.textContent = 'Copiado!'; setTimeout(() => this.textContent = t, 1500); })">Copiar</button>
+                            </div>
+                            @* as linhas separam-se por quebras de linha reais dentro do <pre>: assim aparecem uma por linha mesmo
+                               que o CSS (numeros de linha, fundo) nao esteja carregado ou esteja em cache *@
+                            <pre class="bloco-codigo"><code>@foreach (var linha in f.Linhas!) {<span class="l-cod">@linha</span>@("\n")}</code></pre>
+                        }
+                    </details>
+                }
+            </div>
+        </details>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Slug { get; set; } = "";
+
+    private record Ficheiro(string Caminho, string? Texto)
+    {
+        // o ficheiro acaba em '\n': sem o TrimEnd apareceria uma linha vazia a mais no fim
+        public string[]? Linhas => Texto?.TrimEnd('\n').Split('\n');
+    }
+
+    private List<Ficheiro> ficheiros = new();
+
+    protected override void OnParametersSet()
+    {
+        // os ficheiros so sao lidos uma vez por instancia (nao a cada render)
+        ficheiros = Fonte.FicheirosDe(Slug)
+            .Select(c => new Ficheiro(c, Fonte.Ler(c)))
+            .ToList();
+    }
+}

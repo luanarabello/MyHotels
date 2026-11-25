@@ -1,0 +1,93 @@
+@page "/demos/n-mais-1"
+@using System.Diagnostics
+@inject DemoDbService DemoDb
+
+<DemoPagina Slug="n-mais-1" Titulo="N+1 e Include"
+            Objetivo="contar quantas queries SQL o Entity Framework realmente executa.">
+    <ChildContent>
+        <p>Objectivo: listar os produtos com o nome da respectiva categoria (a BD de demo tem 12 produtos).</p>
+        <div class="mb-3">
+            <button class="btn btn-danger btn-sm me-2" @onclick="ExecutarNMais1">1. Sem Include (N+1)</button>
+            <button class="btn btn-success btn-sm" @onclick="ExecutarInclude">2. Com Include</button>
+        </div>
+
+        @if (titulo is not null)
+        {
+            <div class="alert @(comandos.Count > 2 ? "alert-danger" : "alert-success")">
+                <strong>@titulo</strong><br />
+                Queries SQL executadas: <strong>@comandos.Count</strong> &nbsp;|&nbsp; Tempo: @tempo ms &nbsp;|&nbsp; Linhas: @linhas.Count
+            </div>
+            <div class="row">
+                <div class="col-md-5">
+                    <h2 class="h6">Resultado</h2>
+                    <ul class="small">
+                        @foreach (var l in linhas)
+                        {
+                            <li>@l</li>
+                        }
+                    </ul>
+                </div>
+                <div class="col-md-7">
+                    <h2 class="h6">Comandos SQL (primeiros 4)</h2>
+                    @foreach (var c in comandos.Take(4))
+                    {
+                        <pre class="bg-dark text-light p-2 small mb-2" style="white-space:pre-wrap">@c</pre>
+                    }
+                    @if (comandos.Count > 4)
+                    {
+                        <div class="text-muted small">… e mais @(comandos.Count - 4) queries semelhantes.</div>
+                    }
+                </div>
+            </div>
+        }
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><strong>N+1</strong>: 1 query para obter os produtos + <em>N</em> queries (uma por produto) para obter a categoria de cada um. Com 12 produtos são 13 queries; com 10 000, 10 001.</li>
+            <li>É um dos problemas de desempenho mais comuns com ORMs: cada round-trip à BD tem latência, e o código "parece" inocente. (Aqui a BD é um ficheiro SQLite local, por isso os tempos são pequenos; com uma BD em rede a diferença é muito maior.)</li>
+            <li><code>.Include(p => p.Categoria)</code> pede tudo numa só query com <code>JOIN</code>.</li>
+            <li>Outra alternativa: uma projecção, <code>.Select(p => new { p.Nome, Categoria = p.Categoria.Nome })</code>, que só traz as colunas necessárias. (<code>AsSplitQuery()</code> é uma opção do <code>Include</code> para colecções grandes, não uma solução para o N+1.)</li>
+            <li>Como detectar: ver os comandos SQL executados (como aqui, com <code>LogTo</code>, ou nos logs do EF). Se o número de queries cresce com o número de linhas, há N+1. O <code>ToQueryString()</code> mostra o SQL de uma query, mas não conta quantas são executadas.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private string? titulo;
+    private long tempo;
+    private List<string> comandos = new();
+    private List<string> linhas = new();
+
+    private async Task ExecutarNMais1()
+    {
+        Iniciar("1. Sem Include: N+1 queries");
+        var sw = Stopwatch.StartNew();
+        using var ctx = DemoDb.Criar(comandos.Add);
+        var produtos = await ctx.Produtos.AsNoTracking().OrderBy(p => p.Id).ToListAsync();
+        foreach (var p in produtos)
+        {
+            // uma consulta extra por cada produto!
+            var categoria = await ctx.Categorias.AsNoTracking().FirstAsync(c => c.Id == p.DemoCategoriaId);
+            linhas.Add($"{p.Nome} ({categoria.Nome})");
+        }
+        tempo = sw.ElapsedMilliseconds;
+    }
+
+    private async Task ExecutarInclude()
+    {
+        Iniciar("2. Com Include: 1 query");
+        var sw = Stopwatch.StartNew();
+        using var ctx = DemoDb.Criar(comandos.Add);
+        var produtos = await ctx.Produtos.AsNoTracking().Include(p => p.Categoria).OrderBy(p => p.Id).ToListAsync();
+        foreach (var p in produtos)
+            linhas.Add($"{p.Nome} ({p.Categoria!.Nome})");
+        tempo = sw.ElapsedMilliseconds;
+    }
+
+    private void Iniciar(string t)
+    {
+        titulo = t;
+        comandos = new();
+        linhas = new();
+    }
+}

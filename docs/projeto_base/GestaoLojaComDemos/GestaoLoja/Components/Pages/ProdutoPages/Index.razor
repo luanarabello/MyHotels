@@ -1,0 +1,71 @@
+@page "/produtos"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.QuickGrid
+@using GestaoLoja.Entities
+@using GestaoLoja.Data
+@implements IAsyncDisposable
+@inject IDbContextFactory<GestaoLoja.Data.ApplicationDbContext> DbFactory
+
+<PageTitle>Index</PageTitle>
+
+<h1>Index</h1>
+
+<p>
+    <a href="produtos/create" class="btn btn-primary rounded-circle" title="Novo">
+        <span class="bi bi-plus-lg"></span>
+    </a>
+</p>
+
+<QuickGrid Class="table" Items="context.Produtos.Include(prop=>prop.Categoria).Include(prop=>prop.ModoEntrega)">
+    <TemplateColumn Context="produto">
+        @if (!string.IsNullOrEmpty(produto.Imagem))
+        {
+            <div class="mb-3">
+                <img src="@produto.Imagem"
+                     alt="Imagem do produto"
+                     style="max-width: 150px; border-radius: 8px;" />
+            </div>
+        }
+        else
+        {
+            <img src="/img/placeholder.jpg" 
+                alt="Produto sem imagem" 
+                class="img-thumbnail" 
+                style="max-width:150px; max-height:150px;" />
+       
+        }
+    </TemplateColumn>
+    
+    <PropertyColumn Property="produto => produto.Nome" />
+    <PropertyColumn Property="produto => produto.Descricao" />
+    <PropertyColumn Property="produto => produto.Preco" />
+    
+    <PropertyColumn Property="produto => produto.ModoEntrega.Nome" Title="Modo Entrega" />
+    <PropertyColumn Property="produto => produto.Categoria.Nome" Title="Categoria" />
+
+    <TemplateColumn Context="produto">
+        <a href="@($"produtos/edit?id={produto.Id}")" class="btn btn-outline-primary btn-sm">
+            <span class="bi bi-pencil-square" aria-hidden="true"></span>
+        </a>
+        <a href="@($"produtos/details?id={produto.Id}")" class="btn btn-outline-info btn-sm">
+            <span class="bi bi-info-circle-fill" aria-hidden="true"></span>
+        </a>
+        <a href="@($"produtos/delete?id={produto.Id}")" class="btn btn-danger btn-sm">
+            <span class="bi bi-trash-fill" aria-hidden="true"></span>
+        </a>
+    </TemplateColumn>
+</QuickGrid>
+
+@code {
+    private ApplicationDbContext context = default!;
+
+    private List<Produto> ListaProdutos = new List<Produto>();
+
+    protected override void OnInitialized()
+    {
+        context = DbFactory.CreateDbContext();
+       // ListaProdutos =  context.Produtos.Include(prop=>prop.ca).ToList();
+    }
+
+    public async ValueTask DisposeAsync() => await context.DisposeAsync();
+}

@@ -1,0 +1,97 @@
+@page "/demos/concorrencia"
+@using GestaoLoja.Data
+@using Microsoft.EntityFrameworkCore
+@* Contexto injectado directamente: um unico objecto partilhado por todo o circuit Blazor *@
+@inject ApplicationDbContext ContextoInjectado
+@* Factory: cada operacao cria o seu proprio contexto *@
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+<PageTitle>Demo: DbContext vs Factory</PageTitle>
+
+<h1>Demo: DbContext injectado vs. IDbContextFactory</h1>
+
+<p>
+    Cada botão lança <strong>@NumeroOperacoes queries em paralelo</strong>, como se vários
+    componentes (ou cliques) usassem a base de dados ao mesmo tempo. Esta demo só lê a BD da loja (não altera nada).
+</p>
+
+<div class="mb-3">
+    <button class="btn btn-danger me-2" @onclick="TestarContextoInjectado" disabled="@aCorrer">
+        1. DbContext injectado (partilhado)
+    </button>
+    <button class="btn btn-success" @onclick="TestarFactory" disabled="@aCorrer">
+        2. IDbContextFactory (um DbContext por operação)
+    </button>
+</div>
+
+@if (resultado is not null)
+{
+    <div class="alert @(resultado.Erros == 0 ? "alert-success" : "alert-danger")">
+        <strong>@resultado.Titulo</strong><br />
+        Com sucesso: @resultado.Sucessos &nbsp;|&nbsp; Com erro: @resultado.Erros
+        @if (resultado.Mensagem is not null)
+        {
+            <hr />
+            <code>@resultado.Mensagem</code>
+        }
+    </div>
+}
+
+<h2>Porquê?</h2>
+<ul>
+    <li>O <code>DbContext</code> <strong>não é thread-safe</strong>: só pode executar uma operação de cada vez. Usá-lo em paralelo lança <code>InvalidOperationException</code> (a mensagem exacta pode variar).</li>
+    <li>Em Blazor Server o <code>DbContext</code> injectado (registado como Scoped) vive o circuit inteiro, enquanto o separador do browser estiver ligado, por isso é partilhado por todos os componentes e eventos.</li>
+    <li>Com a factory, cada operação abre e fecha o seu <code>DbContext</code> (<code>using var context = DbFactory.CreateDbContext();</code>) e nunca há sobreposição.</li>
+    <li>As queries são lançadas com <code>Task.Run</code> para forçar o paralelismo real: com SQLite, que é quase síncrono, de outra forma as operações quase nunca se sobreporiam.</li>
+</ul>
+
+<CodigoDemo Slug="concorrencia" />
+<TermosPagina Slug="concorrencia" />
+
+<p class="mt-3"><a href="demos">&larr; Todas as demos</a></p>
+
+@code {
+    private const int NumeroOperacoes = 30;
+    private bool aCorrer;
+    private Resultado? resultado;
+
+    private Task TestarContextoInjectado() =>
+        Executar("1. DbContext injectado (partilhado)",
+            async () => (await ContextoInjectado.Categorias.ToListAsync()).Count);
+
+    private Task TestarFactory() =>
+        Executar("2. IDbContextFactory (um DbContext por operação)",
+            async () =>
+            {
+                using var context = DbFactory.CreateDbContext();
+                return (await context.Categorias.ToListAsync()).Count;
+            });
+
+    private async Task Executar(string titulo, Func<Task<int>> operacao)
+    {
+        aCorrer = true;
+        resultado = null;
+        int sucessos = 0, erros = 0;
+        string? mensagem = null;
+
+        // Task.Run: as operacoes correm mesmo em paralelo (threads diferentes)
+        await Task.WhenAll(Enumerable.Range(0, NumeroOperacoes).Select(_ => Task.Run(async () =>
+        {
+            try
+            {
+                await operacao();
+                Interlocked.Increment(ref sucessos);
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref erros);
+                mensagem ??= $"{ex.GetType().Name}: {ex.Message}";
+            }
+        })));
+
+        resultado = new Resultado(titulo, sucessos, erros, mensagem);
+        aCorrer = false;
+    }
+
+    private record Resultado(string Titulo, int Sucessos, int Erros, string? Mensagem);
+}

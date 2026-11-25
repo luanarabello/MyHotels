@@ -1,0 +1,92 @@
+@page "/demos/autorizacao"
+@using System.Security.Claims
+
+<DemoPagina Slug="autorizacao" Titulo="Antes e depois de proteger"
+            Objetivo="ver como o AuthorizeView e as roles mudam o que cada tipo de utilizador vê.">
+    <ChildContent>
+        <p>Escolha um utilizador <strong>simulado</strong> (não é preciso fazer login):</p>
+        <div class="mb-3">
+            @foreach (var p in new[] { "Anónimo", "Utilizador", "Admin" })
+            {
+                <button class="btn btn-sm @(persona == p ? "btn-primary" : "btn-outline-primary") me-1" @onclick="() => Escolher(p)">@p</button>
+            }
+        </div>
+
+        <CascadingValue Value="estado" TValue="Task<AuthenticationState>">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="card h-100"><div class="card-body">
+                        <h2 class="h6"><code>&lt;AuthorizeView&gt;</code></h2>
+                        <AuthorizeView>
+                            <Authorized><span class="text-success">Autenticado: olá, @context.User.Identity?.Name!</span></Authorized>
+                            <NotAuthorized><span class="text-danger">Não autenticado: veja o login.</span></NotAuthorized>
+                        </AuthorizeView>
+                    </div></div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100"><div class="card-body">
+                        <h2 class="h6"><code>Roles="Admin"</code></h2>
+                        <AuthorizeView Roles="Admin">
+                            <Authorized><span class="text-success">Painel de administração.</span></Authorized>
+                            <NotAuthorized><span class="text-danger">Só administradores.</span></NotAuthorized>
+                        </AuthorizeView>
+                    </div></div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100"><div class="card-body">
+                        <h2 class="h6"><code>Roles="Admin,Gestor"</code></h2>
+                        <AuthorizeView Roles="Admin,Gestor">
+                            <Authorized><span class="text-success">Admin OU Gestor.</span></Authorized>
+                            <NotAuthorized><span class="text-danger">Sem permissão.</span></NotAuthorized>
+                        </AuthorizeView>
+                    </div></div>
+                </div>
+            </div>
+        </CascadingValue>
+
+        <hr />
+        <h2 class="h6">Protecção real de uma página</h2>
+        <p class="mb-1">
+            A página <a href="demos/admin-protegido">/demos/admin-protegido</a> tem <code>[Authorize(Roles = "Admin")]</code>.
+            Só a vê quem tiver a role <code>Admin</code>. O projecto cria dois utilizadores de teste em Development (ver o <code>README.md</code>):
+            <code>admin@gestaoloja.pt</code> (role <code>Admin</code>) e <code>cliente@gestaoloja.pt</code> (role <code>Cliente</code>).
+            O que acontece aos outros depende de quem é e de como lá chega:
+        </p>
+        <ul class="small mb-0">
+            <li><strong>Anónimo</strong>: é redireccionado para o Login.</li>
+            <li><strong>Autenticado, sem a role, a abrir o URL directamente</strong> (ou a fazer F5): vai para <code>/Account/AccessDenied</code>.</li>
+            <li><strong>Autenticado, sem a role, a chegar por um link dentro da aplicação</strong>: o router mostra o <code>NotAuthorized</code> do <code>Routes.razor</code>, que neste projecto distingue os dois casos: anónimo vai para o Login (<code>RedirectToLogin</code>); quem já está autenticado vê "Acesso negado".</li>
+        </ul>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><code>&lt;AuthorizeView&gt;</code> <strong>mostra ou esconde partes</strong> de uma página consoante o utilizador. É só apresentação: esconder um botão não impede ninguém de chamar o código por trás.</li>
+            <li><code>@@attribute [Authorize(Roles = "Admin")]</code> numa página protege a <strong>rota inteira</strong>: quem não cumprir a regra nem a consegue abrir. Num pedido directo quem decide é a autorização do endpoint (Login ou <code>AccessDenied</code>); na navegação dentro da aplicação é o <code>AuthorizeRouteView</code> do <code>Routes.razor</code>, que mostra o seu <code>NotAuthorized</code>.</li>
+            <li>A <strong>segurança real</strong> tem de estar no servidor: validar também nos métodos que alteram dados, não só na interface.</li>
+            <li>Roles são o modelo mais simples. Para regras mais ricas há <strong>policies</strong> (<code>[Authorize(Policy = "…")]</code>) e <strong>claims</strong> personalizados.</li>
+            <li>Nos três botões desta demo o utilizador é fabricado em memória e entregue por <code>CascadingValue</code>, para poder ver os três casos sem fazer login.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private string persona = "Anónimo";
+    private Task<AuthenticationState> estado = Criar("Anónimo");
+
+    private void Escolher(string p)
+    {
+        persona = p;
+        estado = Criar(p);
+    }
+
+    private static Task<AuthenticationState> Criar(string persona)
+    {
+        ClaimsIdentity identidade = persona switch
+        {
+            "Utilizador" => new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, "ana@exemplo.pt") }, "demo"),
+            "Admin" => new ClaimsIdentity(new[] { new Claim(ClaimTypes.Name, "admin@exemplo.pt"), new Claim(ClaimTypes.Role, "Admin") }, "demo"),
+            _ => new ClaimsIdentity()
+        };
+        return Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identidade)));
+    }
+}

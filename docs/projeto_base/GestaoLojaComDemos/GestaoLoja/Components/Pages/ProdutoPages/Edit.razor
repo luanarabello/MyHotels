@@ -1,0 +1,287 @@
+﻿@page "/produtos/edit"
+
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
+@using GestaoLoja.Entities
+@using GestaoLoja.Services
+
+@attribute [Authorize(Roles = AppConfig.RoleAdmin)]
+
+@inject IDbContextFactory<GestaoLoja.Data.ApplicationDbContext> DbFactory
+@inject NavigationManager NavigationManager
+@inject ImagemService Imagens
+
+<PageTitle>Editar produto</PageTitle>
+
+<h1>Editar</h1>
+
+<h2>Produto</h2>
+<hr />
+
+@if (Produto is null)
+{
+    <p><em>A carregar...</em></p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-4">
+            <EditForm Model="Produto" OnValidSubmit="UpdateProduto">
+
+                <DataAnnotationsValidator />
+                <ValidationSummary role="alert" />
+
+                @if (!string.IsNullOrEmpty(erro))
+                {
+                    <div class="alert alert-danger" role="alert">
+                        @erro
+                    </div>
+                }
+
+                <fieldset disabled="@aGuardar">
+                    <div class="mb-3">
+                        <span class="text-danger">*</span>
+                        <label for="nome" class="form-label">Nome:</label>
+                        <InputText id="nome"
+                                   @bind-Value="Produto.Nome"
+                                   class="form-control"
+                                   aria-required="true" />
+                        <ValidationMessage For="() => Produto.Nome"
+                                           class="text-danger" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">
+                            Descrição:
+                        </label>
+                        <InputText id="descricao"
+                                   @bind-Value="Produto.Descricao"
+                                   class="form-control" />
+                        <ValidationMessage For="() => Produto.Descricao"
+                                           class="text-danger" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="preco" class="form-label">Preço:</label>
+                        <InputNumber id="preco"
+                                     @bind-Value="Produto.Preco"
+                                     class="form-control" />
+                        <ValidationMessage For="() => Produto.Preco"
+                                           class="text-danger" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="imagem" class="form-label">Imagem:</label>
+                        <InputFile id="imagem"
+                                   OnChange="HandleFileSelected"
+                                   class="form-control"
+                                   accept=".jpg,.jpeg,.png,.gif,.webp" />
+
+                        <div class="form-text">
+                            Seleciona uma imagem JPG, PNG, GIF ou WEBP, até 2 MB.
+                        </div>
+
+                        @if (selectedFile is not null)
+                        {
+                            <div class="form-text">
+                                Selecionada: @selectedFile.Name (@(selectedFile.Size / 1024) KB)
+                            </div>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(Produto.Imagem))
+                    {
+                        <div class="mb-3">
+                            <p>Imagem atual:</p>
+                            <img src="@Produto.Imagem"
+                                 alt="Imagem do produto"
+                                 style="max-width: 200px; border-radius: 8px;" />
+
+                            <div class="form-check mt-2">
+                                <input id="remover" type="checkbox" class="form-check-input" @bind="removerImagem" />
+                                <label for="remover" class="form-check-label">Remover a imagem atual</label>
+                            </div>
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label for="categoriaid" class="form-label">
+                            Categoria:
+                        </label>
+                        <InputSelect id="categoriaid" @bind-Value="Produto.CategoriaId" class="form-control form-select">
+                            @foreach (var categoria in Categorias)
+                            {
+                                <option value="@categoria.Id">@categoria.Nome</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => Produto.CategoriaId"
+                                           class="text-danger" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modoentregaid" class="form-label">
+                            Modo de Entrega:
+                        </label>
+                        <InputSelect id="modoentregaid" @bind-Value="Produto.ModoEntregaId" class="form-control form-select">
+                            @foreach (var modoDeEntrega in ModosDeEntrega)
+                            {
+                                <option value="@modoDeEntrega.Id">@modoDeEntrega.Nome</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => Produto.ModoEntregaId"
+                                           class="text-danger" />
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        @(aGuardar ? "A guardar..." : "Guardar")
+                    </button>
+                </fieldset>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<div class="mt-3">
+    <a href="/produtos">Voltar à lista</a>
+</div>
+
+@code {
+    // As imagens ficam guardadas na BD como "img/<ficheiro>" (caminho relativo a wwwroot)
+    private const string PastaImagens = "img/";
+
+    [SupplyParameterFromQuery]
+    private int Id { get; set; }
+
+    private Produto? Produto { get; set; }
+
+    private List<Categoria> Categorias = new();
+    private List<ModoEntrega> ModosDeEntrega = new();
+
+    private IBrowserFile? selectedFile;
+    private bool removerImagem;
+
+    private string? erro;
+    private bool aGuardar;
+    private int idCarregado = -1;
+
+    // OnParametersSetAsync (e não OnInitializedAsync): volta a carregar se o ?id= mudar
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Id == idCarregado) return;
+        idCarregado = Id;
+
+        selectedFile = null;
+        removerImagem = false;
+        erro = null;
+
+        using var context = DbFactory.CreateDbContext();
+
+        // AsNoTracking: o contexto não liga as entidades entre si (evita que
+        // Produto.Categoria / Produto.ModoEntrega "ganhem" ao CategoriaId / ModoEntregaId)
+        Produto = await context.Produtos
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == Id);
+
+        if (Produto is null)
+        {
+            NavigationManager.NavigateTo("/notfound");
+            return;
+        }
+
+        Categorias = await context.Categorias.AsNoTracking().ToListAsync();
+        ModosDeEntrega = await context.ModosEntrega.AsNoTracking().ToListAsync();
+    }
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        erro = null;
+        selectedFile = e.File;
+
+        if (selectedFile.Size > ImagemService.TamanhoMaximo)
+        {
+            erro = "A imagem não pode ultrapassar 2 MB.";
+            selectedFile = null;
+        }
+    }
+
+    private async Task UpdateProduto()
+    {
+        if (Produto is null) return;
+
+        erro = null;
+        aGuardar = true;
+        string? novaImagem = null;
+
+        try
+        {
+            // 1) validar e guardar a imagem nova (extensão, tipo e tamanho validados no serviço)
+            if (selectedFile is not null)
+            {
+                var resultado = await Imagens.GuardarAsync(selectedFile);
+                if (!resultado.Ok)
+                {
+                    erro = resultado.Erro;
+                    return;
+                }
+                novaImagem = PastaImagens + resultado.Nome;
+            }
+
+            // 2) carregar o produto da BD e copiar APENAS os campos editáveis
+            using var context = DbFactory.CreateDbContext();
+            var produto = await context.Produtos.FindAsync(Produto.Id);
+
+            if (produto is null)
+            {
+                Imagens.Apagar(novaImagem);
+                NavigationManager.NavigateTo("/notfound");
+                return;
+            }
+
+            produto.Nome = Produto.Nome;
+            produto.Descricao = Produto.Descricao;
+            produto.Preco = Produto.Preco;
+            produto.CategoriaId = Produto.CategoriaId;
+            produto.ModoEntregaId = Produto.ModoEntregaId;
+
+            var imagemAntiga = produto.Imagem;
+            string? imagemParaApagar = null;
+
+            if (novaImagem is not null)
+            {
+                produto.Imagem = novaImagem;
+                imagemParaApagar = imagemAntiga;
+            }
+            else if (removerImagem)
+            {
+                produto.Imagem = null;
+                imagemParaApagar = imagemAntiga;
+            }
+
+            // 3) gravar; se falhar, não deixar a imagem nova órfã no disco
+            try
+            {
+                await context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                Imagens.Apagar(novaImagem);
+                erro = "Não foi possível guardar o produto. Verifica os dados e tenta novamente.";
+                return;
+            }
+
+            // 4) só depois de gravar é que a imagem antiga é apagada
+            Imagens.Apagar(imagemParaApagar);
+
+            NavigationManager.NavigateTo("/produtos");
+        }
+        catch (IOException)
+        {
+            Imagens.Apagar(novaImagem);
+            erro = "Não foi possível guardar a imagem. Tenta novamente.";
+        }
+        finally
+        {
+            aGuardar = false;
+        }
+    }
+}

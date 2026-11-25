@@ -1,0 +1,27 @@
+@* Fundo de cada demo: links para os termos do glossario que a demo usa (lista em GlossarioDados.TermosPorDemo) *@
+@if (termos.Count > 0)
+{
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <strong class="small">Termos desta página:</strong>
+            @foreach (var t in termos)
+            {
+                <a class="badge bg-light text-dark border text-decoration-none ms-1" href="@($"demos/glossario#{t.Id}")">@t.Nome</a>
+            }
+            <a class="small ms-2" href="demos/glossario">Glossário completo &rarr;</a>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Slug { get; set; } = "";
+
+    private List<TermoGlossario> termos = new();
+
+    protected override void OnParametersSet()
+    {
+        termos = GlossarioDados.TermosPorDemo.TryGetValue(Slug, out var ids)
+            ? ids.Select(GlossarioDados.Procurar).OfType<TermoGlossario>().ToList()
+            : new();
+    }
+}

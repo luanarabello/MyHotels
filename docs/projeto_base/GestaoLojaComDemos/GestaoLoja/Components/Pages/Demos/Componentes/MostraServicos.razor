@@ -1,0 +1,16 @@
+@inject DemoSingleton Singleton
+@inject DemoScoped Scoped
+@inject DemoTransient Transient
+
+<tr>
+    <td>@Quem</td>
+    <td><code>@Short(Singleton.Id)</code></td>
+    <td><code>@Short(Scoped.Id)</code></td>
+    <td><code>@Short(Transient.Id)</code></td>
+</tr>
+
+@code {
+    [Parameter] public string Quem { get; set; } = "";
+
+    private static string Short(Guid g) => g.ToString()[..8];
+}

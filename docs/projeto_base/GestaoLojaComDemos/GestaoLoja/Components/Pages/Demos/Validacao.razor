@@ -1,0 +1,117 @@
+@page "/demos/validacao"
+
+<DemoPagina Slug="validacao" Titulo="Validação em camadas"
+            Objetivo="ver três camadas de validação do mesmo formulário e perceber onde é que a validação realmente corre.">
+    <ChildContent>
+        <EditForm Model="modelo" OnValidSubmit="Sucesso" OnInvalidSubmit="Falha" FormName="validacao">
+            <DataAnnotationsValidator />
+            <ValidationSummary class="text-danger" />
+            <CustomValidation @ref="validadorPersonalizado" />
+
+            <div class="mb-3">
+                <label class="form-label">Nome (obrigatório, 3 a 20 caracteres) <span class="badge bg-secondary">attributes</span></label>
+                <InputText class="form-control" @bind-Value="modelo.Nome" />
+                <ValidationMessage For="() => modelo.Nome" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Idade (18 a 120) <span class="badge bg-secondary">attributes</span></label>
+                <InputNumber class="form-control" @bind-Value="modelo.Idade" ParsingErrorMessage="A idade tem de ser um número." />
+                <ValidationMessage For="() => modelo.Idade" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email <span class="badge bg-secondary">attributes</span></label>
+                <InputText class="form-control" @bind-Value="modelo.Email" />
+                <ValidationMessage For="() => modelo.Email" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Palavra-passe <span class="badge bg-warning text-dark">IValidatableObject</span></label>
+                <InputText type="password" class="form-control" @bind-Value="modelo.Password" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Confirmar palavra-passe <span class="badge bg-warning text-dark">IValidatableObject</span></label>
+                <InputText type="password" class="form-control" @bind-Value="modelo.ConfirmarPassword" />
+            </div>
+            <button class="btn btn-primary" type="submit">Enviar</button>
+        </EditForm>
+
+        <p class="mt-3 mb-1"><span class="badge bg-danger">server rule</span> Simular "o nome já existe na base de dados" (aqui é uma comparação fixa com "admin", não uma query real):</p>
+        <button class="btn btn-outline-danger btn-sm" @onclick="SimularNomeExistente">
+            Gravar com o nome "admin" (rejeitado pelo servidor)
+        </button>
+
+        @if (mensagem is not null)
+        {
+            <div class="alert @(mensagem.StartsWith("OK") ? "alert-success" : "alert-warning") mt-3">@mensagem</div>
+        }
+    </ChildContent>
+    <Explicacao>
+        <ol>
+            <li><strong>Attributes</strong> (<code>[Required]</code>, <code>[Range]</code>, <code>[EmailAddress]</code>…): simples, declarativos, validados pelo <code>DataAnnotationsValidator</code>. Cobrem as regras de um só campo.</li>
+            <li><strong>IValidatableObject</strong>: regras do modelo que comparam vários campos, aqui a confirmação da palavra-passe. No submit, só correm depois de os attributes passarem (experimente submeter o formulário vazio e depois com os campos válidos mas as palavras-passe diferentes).</li>
+            <li><strong>Server rules</strong> (por exemplo "o nome já existe"): dependem de dados que só o servidor tem, como a base de dados. Fazem-se depois do submit e mostram-se com um <code>ValidationMessageStore</code> (veja o componente <code>CustomValidation</code>). Um <code>ValidationAttribute</code> personalizado também pode aceder a serviços através do <code>ValidationContext</code>.</li>
+        </ol>
+        <p class="mb-0">
+            <strong>Onde corre a validação?</strong> Em Blazor Server (e em static SSR) o <code>DataAnnotationsValidator</code> corre <em>sempre no servidor</em>:
+            aqui não há validação "no cliente". Só em Blazor WebAssembly corre no browser, que o utilizador controla. Em qualquer caso,
+            o que protege os dados é a validação feita no servidor: um pedido forjado, sem passar pelo formulário, só é validado se o código do servidor o fizer (veja a demo de Over-posting).
+        </p>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private Modelo modelo = new();
+    private CustomValidation? validadorPersonalizado;
+    private string? mensagem;
+
+    private void Sucesso()
+    {
+        validadorPersonalizado?.Limpar();
+        if (modelo.Nome.Equals("admin", StringComparison.OrdinalIgnoreCase))
+        {
+            // regra de servidor: normalmente seria uma consulta a BD
+            validadorPersonalizado?.MostrarErros(new Dictionary<string, List<string>>
+            {
+                [nameof(Modelo.Nome)] = new() { "Este nome já existe." }
+            });
+            mensagem = "Rejeitado pelo servidor: o nome já existe.";
+            return;
+        }
+        mensagem = "OK: todas as validações passaram.";
+    }
+
+    private void Falha() => mensagem = "O formulário tem erros: o OnValidSubmit NÃO foi chamado.";
+
+    private void SimularNomeExistente()
+    {
+        modelo.Nome = "admin";
+        modelo.Idade = 30;
+        modelo.Email = "admin@exemplo.pt";
+        modelo.Password = modelo.ConfirmarPassword = "segredo";
+        Sucesso();
+    }
+
+    private class Modelo : IValidatableObject
+    {
+        [Required(ErrorMessage = "O nome é obrigatório.")]
+        [StringLength(20, MinimumLength = 3, ErrorMessage = "O nome deve ter entre {2} e {1} caracteres.")]
+        public string Nome { get; set; } = "";
+
+        [Range(18, 120, ErrorMessage = "A idade deve estar entre {1} e {2}.")]
+        public int Idade { get; set; }
+
+        [Required(ErrorMessage = "O email é obrigatório.")]
+        [EmailAddress(ErrorMessage = "Email inválido.")]
+        public string Email { get; set; } = "";
+
+        public string Password { get; set; } = "";
+        public string ConfirmarPassword { get; set; } = "";
+
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if (Password != ConfirmarPassword)
+                yield return new ValidationResult("As palavras-passe não coincidem.", new[] { nameof(ConfirmarPassword) });
+            if (Password.Length < 6)
+                yield return new ValidationResult("A palavra-passe deve ter pelo menos 6 caracteres.", new[] { nameof(Password) });
+        }
+    }
+}

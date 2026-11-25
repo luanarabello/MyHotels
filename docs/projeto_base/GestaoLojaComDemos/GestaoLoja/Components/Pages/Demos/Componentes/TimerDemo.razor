@@ -1,0 +1,68 @@
+@implements IDisposable
+
+@* Um timer que incrementa um contador a cada segundo e tenta actualizar o ecrã.
+   Cada instancia e um componente independente: o StateHasChanged de uma nunca faz render da outra,
+   por isso a falha da versao "errada" fica visivel. *@
+<div class="card h-100 @(UsarInvokeAsync ? "border-success" : "border-danger")">
+    <div class="card-body">
+        <h2 class="h6 @(UsarInvokeAsync ? "text-success" : "text-danger")">
+            @(UsarInvokeAsync ? "CERTO" : "ERRADO"): <code>@(UsarInvokeAsync ? "InvokeAsync(StateHasChanged)" : "StateHasChanged()")</code>
+        </h2>
+
+        <button class="btn btn-sm @(UsarInvokeAsync ? "btn-success" : "btn-danger")" @onclick="Iniciar" disabled="@(timer is not null)">Iniciar timer</button>
+        <p class="display-6 my-2">@contador</p>
+
+        @if (!UsarInvokeAsync)
+        {
+            <p class="small mb-1">Erro capturado no timer:</p>
+            <code class="small">@(erro ?? "(ainda nenhum)")</code>
+            <p class="small text-muted mt-2 mb-2">
+                O contador sobe em C#, mas o ecrã não actualiza (o <code>StateHasChanged</code> falhou). Carregue no botão abaixo para forçar um render
+                e ver o valor real: os cliques são eventos da UI, que já correm no dispatcher.
+            </p>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="() => { }">Ver o valor actual (força um render)</button>
+        }
+        else
+        {
+            <p class="small text-muted mb-0">Actualiza ao vivo, uma vez por segundo, durante @Limite segundos.</p>
+        }
+    </div>
+</div>
+
+@code {
+    private const int Limite = 8;
+
+    [Parameter] public bool UsarInvokeAsync { get; set; }
+
+    private System.Threading.Timer? timer;
+    private int contador;
+    private string? erro;
+
+    private void Iniciar()
+    {
+        timer = new System.Threading.Timer(async _ =>
+        {
+            if (contador >= Limite) { timer?.Dispose(); return; }
+            contador++;
+
+            // esta lambda corre numa thread do thread pool, FORA do dispatcher do Blazor
+            if (UsarInvokeAsync)
+            {
+                await InvokeAsync(StateHasChanged);   // muda para o dispatcher e so depois faz o render
+            }
+            else
+            {
+                try
+                {
+                    StateHasChanged();                // thread errada: lanca InvalidOperationException
+                }
+                catch (Exception ex)
+                {
+                    erro = $"{ex.GetType().Name}: {ex.Message}";
+                }
+            }
+        }, null, 0, 1000);
+    }
+
+    public void Dispose() => timer?.Dispose();
+}

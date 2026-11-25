@@ -1,0 +1,162 @@
+@page "/demos/concorrencia-optimista"
+@implements IDisposable
+@inject DemoDbService DemoDb
+
+<DemoPagina Slug="concorrencia-optimista" Titulo="Optimistic concurrency"
+            Objetivo="ver o que acontece quando dois utilizadores editam o mesmo registo ao mesmo tempo.">
+    <ChildContent>
+        <div class="mb-3">
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="semToken" name="modo" checked="@(!comToken)" @onchange="() => Mudar(false)" />
+                <label class="form-check-label" for="semToken">SEM concurrency token</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" id="comToken" name="modo" checked="@comToken" @onchange="() => Mudar(true)" />
+                <label class="form-check-label" for="comToken">COM <code>[ConcurrencyCheck]</code></label>
+            </div>
+        </div>
+
+        <ol>
+            <li class="mb-2">
+                <button class="btn btn-primary btn-sm" @onclick="Carregar">Utilizadores A e B abrem o mesmo item</button>
+                @if (carregado)
+                {
+                    <span class="ms-2">Ambos vêem: <strong>@NomeA</strong>@(comToken ? $" (versão {VersaoA})" : "")</span>
+                }
+            </li>
+            <li class="mb-2">
+                A grava <code>"Editado por A"</code>:
+                <button class="btn btn-outline-primary btn-sm" disabled="@(!carregado)" @onclick="GravarA">Gravar A</button>
+            </li>
+            <li class="mb-2">
+                B grava <code>"Editado por B"</code> (sem ter visto a alteração de A):
+                <button class="btn btn-outline-primary btn-sm" disabled="@(!carregado)" @onclick="GravarB">Gravar B</button>
+            </li>
+        </ol>
+
+        @foreach (var l in registo)
+        {
+            <div class="small">@l</div>
+        }
+
+        @if (resultado is not null)
+        {
+            <div class="alert @(resultado.StartsWith("CONFLITO") ? "alert-success" : "alert-danger") mt-2">@resultado</div>
+        }
+        <div class="mt-2">Valor final na BD: <strong>@(valorBd ?? "-")</strong></div>
+        <button class="btn btn-link btn-sm" @onclick="Reiniciar">Reiniciar a BD de demonstração</button>
+    </ChildContent>
+    <Explicacao>
+        <ul>
+            <li><strong>Sem concurrency token</strong>: "o último a gravar ganha" (<em>last write wins</em>). A alteração de quem gravou primeiro é perdida sem aviso. É o comportamento por omissão do EF.</li>
+            <li><strong>Optimistic concurrency</strong>: o EF acrescenta o valor original do concurrency token à cláusula <code>WHERE</code> do <code>UPDATE</code>: <code>UPDATE … WHERE Id = @@id AND Versao = @@versaoOriginal</code>. Se outra pessoa já mudou a linha, nenhuma linha é afectada e o EF lança <code>DbUpdateConcurrencyException</code>.</li>
+            <li>Chama-se <em>optimistic</em> porque não bloqueia ninguém: assume que os conflitos são raros e só reage quando acontecem. A alternativa, <em>pessimistic concurrency</em>, bloqueia a linha enquanto alguém edita (o EF Core não tem suporte directo para isso).</li>
+            <li>Em SQL Server usa-se normalmente uma coluna <code>rowversion</code> (<code>[Timestamp] byte[]</code>) que a própria BD incrementa. Aqui usamos um inteiro <code>Versao</code> com <code>[ConcurrencyCheck]</code>, incrementado à mão (SQLite não tem <code>rowversion</code>).</li>
+            <li>Ao apanhar a excepção, a aplicação decide: mostrar os valores actuais ao utilizador, deixá-lo comparar e voltar a tentar.</li>
+        </ul>
+    </Explicacao>
+</DemoPagina>
+
+@code {
+    private bool comToken;
+    private bool carregado;
+    private string? resultado, valorBd;
+    private string? primeiroAGravar;     // quem gravou primeiro (para saber se alguem perdeu alteracoes)
+    private readonly List<string> registo = new();
+
+    private DemoDbContext<DemoMarker>? ctxA, ctxB;
+    private DemoItem? itemA, itemB;
+    private DemoItemSemToken? semA, semB;
+
+    private string? NomeA => comToken ? itemA?.Nome : semA?.Nome;
+    private int? VersaoA => comToken ? itemA?.Versao : null;
+
+    private void Mudar(bool valor)
+    {
+        comToken = valor;
+        Limpar();
+    }
+
+    private void Limpar()
+    {
+        ctxA?.Dispose(); ctxB?.Dispose();
+        ctxA = ctxB = null;
+        carregado = false;
+        resultado = valorBd = null;
+        primeiroAGravar = null;
+        registo.Clear();
+    }
+
+    private async Task Carregar()
+    {
+        Limpar();
+        ctxA = DemoDb.Criar();
+        ctxB = DemoDb.Criar();
+        if (comToken)
+        {
+            itemA = await ctxA.Itens.FirstAsync();
+            itemB = await ctxB.Itens.FirstAsync();
+        }
+        else
+        {
+            semA = await ctxA.ItensSemToken.FirstAsync();
+            semB = await ctxB.ItensSemToken.FirstAsync();
+        }
+        carregado = true;
+        await LerBd();
+    }
+
+    private Task GravarA() => Gravar("A", ctxA!, itemA, semA);
+    private Task GravarB() => Gravar("B", ctxB!, itemB, semB);
+
+    private async Task Gravar(string quem, DemoDbContext<DemoMarker> ctx, DemoItem? comT, DemoItemSemToken? semT)
+    {
+        try
+        {
+            if (comToken)
+            {
+                comT!.Nome = $"Editado por {quem}";
+                comT.Versao++;                       // nova versao; o valor ORIGINAL vai na clausula WHERE
+            }
+            else
+            {
+                semT!.Nome = $"Editado por {quem}";
+            }
+            await ctx.SaveChangesAsync();
+            registo.Add($"{quem}: gravou com sucesso.");
+
+            if (primeiroAGravar is null)
+            {
+                primeiroAGravar = quem;     // o primeiro a gravar nunca tem conflito
+            }
+            else if (!comToken && primeiroAGravar != quem)
+            {
+                // sem concurrency token, o segundo a gravar sobrepoe-se ao primeiro sem qualquer aviso
+                resultado = $"A alteração de {primeiroAGravar} foi PERDIDA sem aviso (o último a gravar ganha).";
+            }
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            registo.Add($"{quem}: DbUpdateConcurrencyException!");
+            resultado = $"CONFLITO detectado: {quem} tentou gravar sobre dados que mudaram. O EF recusou o UPDATE, e nada foi perdido.";
+        }
+        await LerBd();
+    }
+
+    private async Task LerBd()
+    {
+        using var c = DemoDb.Criar();
+        valorBd = comToken
+            ? $"{(await c.Itens.AsNoTracking().FirstAsync()).Nome} (versão {(await c.Itens.AsNoTracking().FirstAsync()).Versao})"
+            : (await c.ItensSemToken.AsNoTracking().FirstAsync()).Nome;
+    }
+
+    private async Task Reiniciar()
+    {
+        Limpar();
+        DemoDb.Reiniciar();
+        await LerBd();
+    }
+
+    public void Dispose() { ctxA?.Dispose(); ctxB?.Dispose(); }
+}
