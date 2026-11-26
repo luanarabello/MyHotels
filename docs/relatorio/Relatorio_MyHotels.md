@@ -85,6 +85,7 @@ erDiagram
 - **Modelação de múltiplas categorias por alojamento e subcategorias:** Optou-se por uma relação `N:M` nativa em EF Core 8 entre `Alojamento` e `Categoria`, complementada por uma auto-referência opcional (`CategoriaPaiId`) em `Categoria`, permitindo classificar e filtrar alojamentos nos frisos deslizantes por múltiplos critérios sem duplicar registos.
 - **Múltiplos caminhos de eliminação em cascata no SQL Server:** Como `ItemReserva` é alcançável a partir de `Hotel` tanto via `Alojamento` como via `Reserva`, o SQL Server rejeita múltiplos caminhos de `CASCADE DELETE`. Configurou-se `DeleteBehavior.Restrict` em `OnModelCreating`, resolvendo o erro e garantindo integridade referencial.
 - **Referência `Microsoft.AspNetCore.App` numa RCL partilhada com MAUI:** O template inicial da `RCLMyHotels` incluía `<FrameworkReference Include="Microsoft.AspNetCore.App" />`, o que impedia a compilação do `MyHotelsMAUI` para `iossimulator-x64` e `maccatalyst-x64`. Substituiu-se pelo pacote multiplataforma `Microsoft.AspNetCore.Components.Web` e removeu-se o `NavMenu.razor` duplicado dos projetos hospedeiros.
+- **Serialização JSON de entidades relacionadas na API:** Para devolver diretamente as entidades de domínio sem criar ciclos infinitos (ex.: `Hotel` ↔ `Alojamento`), configurou-se `ReferenceHandler.IgnoreCycles` nas opções JSON dos Controllers da `RESTfulAPI`.
 
 ---
 
